@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MovilCenter · Teléfonos de contado o en cuotas</title>
+<meta name="description" content="Teléfonos, tablets y accesorios con garantía. Compra de contado o financia tu equipo en cuotas mensuales.">
+<meta name="theme-color" content="#0B0B0B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111'/%3E%3Crect x='11' y='6' width='10' height='20' rx='3' fill='none' stroke='%23E2C35C' stroke-width='2.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<noscript><div style="background:#C9A227;color:#111;padding:14px 16px;font:600 15px Arial,sans-serif;text-align:center">Para comprar en esta tienda necesitas activar JavaScript en tu navegador.</div></noscript>
+<div class="strip"><div class="wrap" id="strip"></div></div>
+<header class="main"><div class="wrap hd" id="hd"></div><nav class="cats"><div class="wrap" id="cats"></div></nav></header>
+<main class="wrap" id="app"><div class="loading">Cargando la tienda…</div></main>
+<footer id="foot"></footer>
+<div class="ov" id="ov" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status" hidden></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
