@@ -6,8 +6,9 @@ Tiempo estimado: entre 30 y 45 minutos. Costo: $0. El dominio propio es opcional
 
 | Carpeta / archivo | Para qué sirve |
 |---|---|
-| `tienda/` | La página web. Esta carpeta completa es la que subes a Netlify. |
+| `tienda/` | La página web. Vercel publica esta carpeta (ver `vercel.json`). |
 | `tienda/config.js` | **El único archivo que editas**: datos de Supabase y de tu marca. |
+| `vercel.json` | Le indica a Vercel que publique la carpeta `tienda` sin compilar nada. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Carga 11 productos de ejemplo. Luego los cambias por los tuyos. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -49,26 +50,28 @@ Así los clientes entran apenas se registran. El correo gratuito de Supabase sol
 1. En Supabase, pulsa el botón **Connect** (arriba) o ve a **Project Settings → API Keys**. Copia dos datos:
    - **Project URL**, que se ve así: `https://abcdefghijk.supabase.co`
    - **Publishable key**, que empieza con `sb_publishable_`. En proyectos antiguos se llama **anon public**.
-2. Abre `tienda/config.js` con el Bloc de notas y pega cada dato donde dice `PEGA_AQUI...`.
+2. En GitHub abre `tienda/config.js`, pulsa el lápiz (**Edit**) y pega cada dato donde dice `PEGA_AQUI...`.
 3. En el mismo archivo cambia los datos de tu marca: nombre, RIF, ciudad, WhatsApp y correo.
-4. Guarda el archivo.
+4. Pulsa **Commit changes**. Vercel publicará el cambio solo, en menos de un minuto.
 
 > ⚠️ Nunca pegues en `config.js` la **Secret key**, la **service_role** ni la contraseña de la base de datos. La Publishable key sí puede ser pública: la seguridad la ponen las reglas de la base de datos.
 
-## Paso 5. Publicar la página en Netlify
+## Paso 5. Publicar la página en Vercel
 
-1. Entra a **netlify.com** y crea una cuenta gratuita.
-2. Ve a **Sites → Add new site → Deploy manually**.
-3. **Arrastra la carpeta `tienda`** completa a la zona indicada.
-4. En unos segundos tendrás una dirección como `https://nombre-raro-123.netlify.app`.
-5. Para cambiar ese nombre: **Site configuration → Change site name**, por ejemplo `movilcenter.netlify.app`.
+1. Entra a **vercel.com** e inicia sesión con tu cuenta de **GitHub**.
+2. Pulsa **Add New… → Project** y elige el repositorio **movilcenter** → **Import**.
+3. Deja todo como viene:
+   - **Framework Preset:** Other
+   - **Root Directory:** `./`
+   - No hace falta poner variables de entorno.
+4. Pulsa **Deploy**. En menos de un minuto tendrás una dirección como `https://movilcenter.vercel.app`.
 
-Cada vez que cambies algún archivo, vuelve a **Deploys** y arrastra otra vez la carpeta `tienda`.
+Cada vez que cambies un archivo en GitHub, Vercel vuelve a publicar la tienda automáticamente.
 
 ## Paso 6. Decirle a Supabase cuál es tu página
 
 1. En Supabase ve a **Authentication → URL Configuration**.
-2. En **Site URL** pega la dirección de Netlify, por ejemplo `https://movilcenter.netlify.app`.
+2. En **Site URL** pega la dirección de Vercel, por ejemplo `https://movilcenter.vercel.app`.
 3. En **Redirect URLs** agrega la misma dirección.
 4. Guarda.
 
@@ -116,7 +119,7 @@ Borra los productos de ejemplo que no vendas, o márcalos con `activo = false`.
 ## Paso 10 (opcional). Dominio propio
 
 1. Compra el dominio, por ejemplo `movilcenter.com` (unos $10–15 al año).
-2. En Netlify: **Domain management → Add a domain** y sigue las instrucciones.
+2. En Vercel: **Project → Settings → Domains → Add** y sigue las instrucciones.
 3. Vuelve al **Paso 6** y cambia la Site URL por tu dominio nuevo.
 
 ---
@@ -140,7 +143,7 @@ Borra los productos de ejemplo que no vendas, o márcalos con `activo = false`.
 
 | Mensaje | Solución |
 |---|---|
-| "Falta conectar la tienda" | Revisa el Paso 4: faltan la URL o la clave en `config.js`, o no volviste a subir la carpeta. |
+| "Falta conectar la tienda" | Revisa el Paso 4: faltan la URL o la clave en `config.js`, o el cambio no se guardó con **Commit changes**. |
 | "No se pudo conectar con la base de datos" | Revisa el Paso 2: no se ejecutó `01_esquema.sql`, o la clave está mal copiada. |
 | "Esa cédula ya está registrada" | Ya existe una cuenta con esa cédula. El cliente debe usar "¿Olvidaste tu contraseña?". |
 | No veo el botón Panel | Revisa el Paso 7 y vuelve a iniciar sesión. |
