@@ -4,8 +4,8 @@
    ===================================================================== */
 window.TIENDA = {
   // 1. Datos de conexión de Supabase (ver LEEME.md, paso 4)
-  supabaseUrl: 'PEGA_AQUI_TU_PROJECT_URL',        // ej. https://abcdefghijk.supabase.co
-  supabaseAnonKey: 'PEGA_AQUI_TU_ANON_KEY',       // la "Publishable key" (sb_publishable_...) o la "anon public". Es pública, no es secreta.
+  supabaseUrl: 'https://qyryldoieutnbwpjgeuu.supabase.co',        // ej. https://abcdefghijk.supabase.co
+  supabaseAnonKey: 'sb_publishable_RUix41H20CEa6AyZKHYdtw_hpHqdW67',       // la "Publishable key" (sb_publishable_...) o la "anon public". Es pública, no es secreta.
                                                   // NUNCA pegues aquí la "Secret key" ni la "service_role".
 
   // 2. Datos de la marca
