@@ -13,6 +13,7 @@ Tiempo estimado: entre 30 y 45 minutos. Costo: $0. El dominio propio es opcional
 | `supabase/02_catalogo.sql` | Carga 11 productos de ejemplo. Luego los cambias por los tuyos. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
 | `supabase/04_crear_admin.sql` | Convierte tu cuenta en administrador. |
+| `supabase/06_ajustes.sql` | Verificación solo para comprar en cuotas, sin referencia personal y preguntas de empleo para ventas online. |
 | `supabase/05_actualizacion.sql` | Verificación de identidad al registrarse, módulo “Trabaja con nosotros”, equipos solo de contado y cédula/teléfono solo con números. |
 
 ---
@@ -33,7 +34,7 @@ Tiempo estimado: entre 30 y 45 minutos. Costo: $0. El dominio propio es opcional
 3. Pulsa **New query** otra vez y repite con `supabase/02_catalogo.sql`.
 4. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 5. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
-6. Por último ejecuta `supabase/05_actualizacion.sql`. Si ya habías ejecutado los anteriores, solo ejecuta este.
+6. Por último ejecuta `supabase/05_actualizacion.sql` y luego `supabase/06_ajustes.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;
@@ -128,7 +129,8 @@ Borra los productos de ejemplo que no vendas, o márcalos con `activo = false`.
 
 ## Uso diario
 
-- **Clientes:** cada cliente nuevo envía foto de su cédula, una selfie con la cédula, su ubicación, ocupación, ingreso y una referencia. Revísalos aquí y pulsa **Verificar identidad** o **Rechazar**. Un cliente sin verificación no puede comprar; uno en revisión sí puede, pero conviene verificarlo antes de aprobar su crédito.
+- **Ventas:** cuántas ventas fueron de contado y cuántas financiadas cada mes, con montos, porcentaje financiado y el detalle de cada venta.
+- **Clientes:** crear una cuenta es inmediato y permite comprar de contado. Solo quien quiere comprar en cuotas envía foto de su cédula, una foto suya, su ubicación, ocupación e ingreso. Los revisas al aprobar su crédito: al aprobarlo, la identidad queda verificada. También puedes verificar o rechazar desde esta pestaña.
 - **Postulaciones:** personas que quieren trabajar promocionando equipos (página **Empleos**). Puedes escribirles por WhatsApp desde el panel y marcar su estado: nueva, contactada, entrevista, contratada o descartada.
 - **Inventario:** pulsa la forma de pago de un equipo para cambiarlo entre “contado y cuotas” y “solo contado”.
 
@@ -154,5 +156,5 @@ Borra los productos de ejemplo que no vendas, o márcalos con `activo = false`.
 | "Esa cédula ya está registrada" | Ya existe una cuenta con esa cédula. El cliente debe usar "¿Olvidaste tu contraseña?". |
 | No veo el botón Panel | Revisa el Paso 7 y vuelve a iniciar sesión. |
 | No llegan correos | Revisa el Paso 3. El correo gratuito de Supabase tiene un límite bajo por hora. |
-| “Antes de comprar completa la verificación” | El cliente debe entrar a **Mi cuenta → Verificación** y enviar sus documentos. |
+| “Para comprar en cuotas primero verifica tu identidad” | El cliente debe entrar a **Mi cuenta → Verificación** y enviar sus documentos. |
 | No se aplican las moras | Revisa que activaste **pg_cron** y ejecutaste `03_tarea_diaria.sql`. |

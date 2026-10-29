@@ -116,7 +116,7 @@ const S = {
   cart: loadCart(), coupon:'', route:{v:'inicio'}, after:null,
   f:{cat:null, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''},
   pd:{color:0, storage:0, qty:1}, sim:null,
-  co:null, acct:'resumen', adm:'resumen', admF:{pagos:'todos', cred:'todos', ped:'activos', cli:'pendiente', pos:'activas'},
+  co:null, acct:'resumen', adm:'resumen', admF:{pagos:'todos', cred:'todos', ped:'activos', cli:'pendiente', pos:'activas', ven:'todas'},
   busy:false, ready:false, kyc:null, post:null, posts:[],
 };
 let sb = null;
@@ -268,7 +268,7 @@ function pcard(p){
   const out = p.stock<=0; const n = midPlan();
   const opts = p.colors.length>1 || p.storages;
   return `<article class="pc">
-    <button class="ph" data-act="pd" data-id="${p.id}" aria-label="Ver ${esc(p.name)}">${img(p)}${out?'<span class="tag">Agotado</span>':p.fin?'<span class="tag ok">En cuotas</span>':'<span class="tag dark">Solo contado</span>'}</button>
+    <button class="ph" data-act="pd" data-id="${p.id}" aria-label="Ver ${esc(p.name)}">${img(p)}${out?'<span class="tag">Agotado</span>':p.fin?'<span class="tag ok">Contado o cuotas</span>':'<span class="tag dark">Solo contado</span>'}</button>
     <div class="bd">
       <span class="brandname">${esc(p.brand)}</span>
       <button class="nm" data-act="pd" data-id="${p.id}">${esc(p.name)}${p.storages?` ${esc(p.storages[0].n)}`:''}</button>
@@ -380,7 +380,7 @@ function vCatalogo(){
     </aside>
     <div>
       <div class="toolbar"><div><h1 style="font-size:24px">${esc(f.cat||'Todo el catálogo')}</h1><span class="muted small">${list.length} producto${list.length===1?'':'s'}</span></div>
-        <div class="chips">${[['','Todos'],['si','En cuotas'],['no','Solo de contado']].map(([k,l])=>`<button class="chip" data-act="ffin" data-v="${k}" aria-pressed="${(f.fin||'')===k}">${l}</button>`).join('')}</div>
+        <div class="chips">${[['','Todos'],['si','Contado o cuotas'],['no','Solo contado']].map(([k,l])=>`<button class="chip" data-act="ffin" data-v="${k}" aria-pressed="${(f.fin||'')===k}">${l}</button>`).join('')}</div>
         <label class="row small">Ordenar por <select data-on="fsort" aria-label="Ordenar"><option value="rel">Relevancia</option><option value="asc" ${f.sort==='asc'?'selected':''}>Menor precio</option><option value="desc" ${f.sort==='desc'?'selected':''}>Mayor precio</option><option value="az" ${f.sort==='az'?'selected':''}>Nombre A–Z</option></select></label></div>
       ${list.length?`<div class="pgrid">${list.map(pcard).join('')}</div>`:`<div class="empty"><h2>No encontramos productos</h2><p>Prueba con otra búsqueda o quita algunos filtros.</p><button class="btn" data-act="clearf">Limpiar filtros</button></div>`}
     </div>
@@ -395,7 +395,7 @@ function vProducto(){
   <section class="pdp">
     <div class="gal">${img(p, pd.color)}</div>
     <div class="inf">
-      <span class="brandname">${esc(p.brand)} · Código ${String(p.id).padStart(4,'0')}</span>
+      <span class="brandname">${esc(p.brand)} · Código ${String(p.id).padStart(4,'0')}</span>${p.fin?'<span class="tag ok" style="justify-self:start">Contado o cuotas</span>':'<span class="tag dark" style="justify-self:start">Solo contado</span>'}
       <h1>${esc(p.name)}${p.storages?' '+esc(p.storages[pd.storage].n):''}</h1>
       <div><span class="pr num">${usd(price)}</span><div class="muted small">${bs(price*S.cfg.tasa)} a la tasa del día</div></div>
       <div><h4 style="margin-bottom:8px">Color: <span class="muted" style="font-weight:500">${esc(p.colors[pd.color]?.n)}</span></h4>
@@ -458,7 +458,6 @@ function vCheckout(){
   if(!u){ S.after = 'checkout'; return vLogin('Inicia sesión o crea tu cuenta para completar tu compra o solicitar financiamiento.'); }
   if(isAdmin()) return `<div class="empty"><h2>Estás conectado como administrador</h2><p>Cierra sesión y entra con una cuenta de cliente para comprar.</p></div>`;
   if(!S.cart.length) return vCarrito();
-  if(['incompleto','rechazado'].includes(u.verif)) return `<div class="empty"><h2>Falta verificar tu identidad</h2><p>${u.verif==='rechazado'?'Tus documentos fueron rechazados. Vuelve a enviarlos para poder comprar.':'Antes de tu primera compra necesitamos la foto de tu cédula y algunos datos. Toma unos 2 minutos.'}</p><button class="btn buy" data-act="acct" data-v="verificacion">Verificar mi identidad</button></div>`;
   if(!S.co) S.co = {ship:u.addr?'local':'retiro', addr:u.addr||'', city:u.city||'', mode:'contado', n:midPlan(), ini:S.cfg.inicialMin, method:'pago_movil', later:false, when:'ahora', bank:BANKS[0], ref:'', amount:'', file:null, err:'', showPlan:false};
   const co = S.co, k = coCalc();
   const noFin = S.cart.filter(i=>!P(i.pid).fin);
@@ -467,7 +466,9 @@ function vCheckout(){
   co.when = (co.method==='efectivo' || co.later) ? 'despues' : 'ahora';
   if(co.method==='efectivo') co.ship='retiro';
   const fin = co.mode==='financiado';
+  const needV = fin && ['incompleto','rechazado'].includes(u.verif);
   const el = fin ? eligibility(k.financed) : null;
+  if(el && needV){ el.ok = false; }
   const cur = METODOS[co.method].cur;
   const hoyCur = cur==='Bs' ? bs(r2(k.hoy*S.cfg.tasa)) : usd(k.hoy);
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
@@ -501,7 +502,8 @@ function vCheckout(){
         <div class="field rng"><label for="co-ini">Inicial: <b id="ini-l">${Math.round(co.ini*100)}% · ${usd(k.down)}</b></label><input id="co-ini" type="range" min="${Math.round(S.cfg.inicialMin*100)}" max="${Math.round(S.cfg.inicialMax*100)}" step="5" value="${Math.round(co.ini*100)}" data-on="ini"></div>
         <p class="muted small">Primera cuota hacia el ${fd(addMonths(S.today,1))}. Si pagas una cuota después de su fecha, se suma ${usd(S.cfg.mora)}. <button class="link small" data-act="toggleplan">${co.showPlan?'Ocultar fechas':'Ver todas las fechas'}</button></p>
         ${co.showPlan?`<div class="tbl"><table class="t"><tbody>${Array.from({length:co.n},(_,i)=>`<tr><td>Cuota ${i+1}</td><td>${fd(addMonths(S.today,i+1))}</td><td class="r num">${usd(i===co.n-1?r2(k.financed-k.cuota*(co.n-1)):k.cuota)}</td></tr>`).join('')}</tbody></table></div>`:''}
-        ${el.ok?'':`<div class="note bad small">${el.why.map(esc).join('<br>')}</div>`}`:''}
+        ${needV?`<div class="note warn small">${u.verif==='rechazado'?'Tu verificación fue rechazada. Vuelve a enviar tus documentos para comprar en cuotas.':'Para comprar en cuotas necesitamos verificar tu identidad. Toma unos 2 minutos y luego vuelves aquí.'}<div style="margin-top:8px"><button class="btn sm brand" data-act="goverif">Verificar mi identidad</button></div></div>`
+          :el.why.length?`<div class="note bad small">${el.why.map(esc).join('<br>')}</div>`:''}`:''}
     </section>
 
     <section class="box"><h2><span class="stepn">3</span>${fin?'Pago de la inicial':'Pago'}</h2>
@@ -543,8 +545,8 @@ function vLogin(msg){
         <button class="link small" type="button" data-act="forgot">¿Olvidaste tu contraseña?</button>
       </form>
     </section>
-    <section class="box"><h2>¿Eres nuevo?</h2><p class="muted">Crea tu cuenta para comprar de contado o en cuotas. Te pediremos:</p>
-      <ul class="checklist plain"><li>Tus datos, cédula y teléfono (solo números)</li><li>Tu dirección y ubicación</li><li>Ocupación e ingreso aproximado</li><li>Una referencia personal</li><li>Foto de tu cédula y una selfie con ella (puedes tomarlas desde el teléfono)</li></ul>
+    <section class="box"><h2>¿Eres nuevo?</h2><p class="muted">Crear tu cuenta toma 1 minuto: nombre, cédula, teléfono y correo. Con ella compras de contado de inmediato.</p>
+      <ul class="checklist plain"><li>Cédula y teléfono solo con números</li><li>Seguimiento de tus pedidos y pagos</li><li>Si quieres pagar en cuotas, verificas tu identidad en ese momento</li></ul>
       <button class="btn buy" data-act="go" data-v="registro">Crear cuenta</button>
     </section></div>`;
 }
@@ -601,7 +603,7 @@ function vCuenta(){
   const nf = S.notifs;
   const attn = ords.filter(o=>['pendiente_pago','pago_rechazado'].includes(o.st)).length + cr.filter(c=>c.st==='en_mora').length;
   const needV = ['incompleto','rechazado'].includes(u.verif);
-  const tabs = [['resumen','Resumen',attn],['verificacion','Verificación',needV?1:0],['pedidos','Mis pedidos',0],['creditos','Mis créditos',cr.filter(c=>c.st==='en_mora').length],['pagos','Mis pagos',0],['notificaciones','Notificaciones',nf.filter(n=>!n.read).length],['datos','Mis datos',0]];
+  const tabs = [['resumen','Resumen',attn],['verificacion','Verificación',u.verif==='rechazado'?1:0],['pedidos','Mis pedidos',0],['creditos','Mis créditos',cr.filter(c=>c.st==='en_mora').length],['pagos','Mis pagos',0],['notificaciones','Notificaciones',nf.filter(n=>!n.read).length],['datos','Mis datos',0]];
   const t = S.acct;
   let body='';
   if(t==='resumen'){
@@ -609,7 +611,7 @@ function vCuenta(){
     const nxt = cr.filter(c=>['activo','en_mora'].includes(c.st)).flatMap(c=>c.cuotas.filter(q=>q.status!=='pagada').map(q=>({c,q}))).sort((a,b)=>a.q.due-b.q.due)[0];
     const act = ords.filter(o=>!['entregado','cancelado'].includes(o.st));
     body = `<h1>Hola, ${esc(u.name.split(' ')[0])}</h1>
-      ${needV?`<div class="note ${u.verif==='rechazado'?'bad':'warn'}">${u.verif==='rechazado'?'No pudimos verificar tus documentos.':'Falta verificar tu identidad para poder comprar.'} <button class="link" data-act="acct" data-v="verificacion">Completar verificación</button></div>`:u.verif==='pendiente'?`<div class="note small">Estamos revisando tus documentos de identidad.</div>`:''}
+      ${u.verif==='rechazado'?`<div class="note bad">No pudimos verificar tus documentos. Para comprar en cuotas vuelve a enviarlos. <button class="link" data-act="acct" data-v="verificacion">Enviar documentos</button></div>`:''}
       <div class="kpis">
         <div class="kpi"><div class="l">Pedidos en curso</div><div class="v num">${act.length}</div></div>
         <div class="kpi ${cr.some(c=>c.st==='en_mora')?'alert':''}"><div class="l">Saldo de créditos</div><div class="v num">${usd(deuda)}</div></div>
@@ -676,8 +678,8 @@ function vAdmin(){
   const mora = S.credits.filter(c=>c.st==='en_mora');
   const toShip = S.orders.filter(o=>['preparando','listo_retiro','pendiente_pago'].includes(o.st));
   const low = S.products.filter(p=>p.stock<=5);
-  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',S.users.filter(x=>x.role==='cliente'&&x.verif==='pendiente').length],['postulaciones','Postulaciones',S.posts.filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]];
-  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, inventario:aInventario, clientes:aClientes, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm] || aResumen;
+  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['ventas','Ventas',0],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',S.users.filter(x=>x.role==='cliente'&&x.verif==='pendiente').length],['postulaciones','Postulaciones',S.posts.filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]];
+  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, ventas:aVentas, inventario:aInventario, clientes:aClientes, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm] || aResumen;
   return `<div class="panel"><nav class="side"><div class="who"><b>Administración</b><div class="muted small">${esc(u.name)}</div></div>
     ${tabs.map(([k,l,n])=>`<button data-act="adm" data-v="${k}" aria-current="${S.adm===k}">${l}${n?`<span class="c">${n}</span>`:''}</button>`).join('')}
     <button data-act="reload">Recargar información</button><button data-act="go" data-v="inicio">Ver tienda</button><button data-act="logout">Cerrar sesión</button></nav>
@@ -749,6 +751,47 @@ function aCreditos(){
       <td class="nw">${q.mora&&q.status!=='pagada'?`<button class="btn sm" data-act="condonar" data-q="${q.id}">Condonar mora</button>`:''}${q.status==='pendiente'?` <button class="btn sm" data-act="cajacuota" data-q="${q.id}">Pago en caja</button>`:''}</td></tr>`}).join('')}
       </tbody></table></div>`}</div></article>`}).join(''):'<div class="empty">No hay créditos en este filtro.</div>'}`;
 }
+const VENDIDO = ['preparando','listo_retiro','enviado','entregado'];
+function aVentas(){
+  const f = S.admF.ven || 'todas';
+  const sales = S.orders.filter(o=>VENDIDO.includes(o.st));
+  const months = Array.from({length:6},(_,i)=>addMonths(new Date(S.today.getFullYear(),S.today.getMonth(),1),i-5));
+  const inMonth = (o,m) => o.created.getFullYear()===m.getFullYear() && o.created.getMonth()===m.getMonth();
+  const rows = months.map(m=>{ const ms = sales.filter(o=>inMonth(o,m)); const c = ms.filter(o=>o.mode==='contado'), fz = ms.filter(o=>o.mode==='financiado');
+    return {m, nc:c.length, nf:fz.length, vc:r2(sum(c,o=>o.total)), vf:r2(sum(fz,o=>o.total))}; });
+  const cur = rows[5], prev = rows[4], tot = cur.nc+cur.nf;
+  const pct = tot ? Math.round(cur.nf*100/tot) : 0;
+  const diff = (a,b) => b ? `${a>=b?'+':''}${Math.round((a-b)*100/b)}% vs. mes anterior` : 'sin ventas el mes anterior';
+  // gráfico de barras agrupadas (cantidad de ventas)
+  const W=640,H=230,L=40,B=30,gw=(W-L-10)/6,bw=Math.min(30,gw/2-6);
+  const mx = Math.max(4,...rows.map(r=>Math.max(r.nc,r.nf))); const top = Math.ceil(mx/4)*4;
+  const yv = v => H-B-(H-B-16)*v/top;
+  const grid = [0,.5,1].map(t=>`<line x1="${L}" x2="${W-10}" y1="${yv(top*t)}" y2="${yv(top*t)}" stroke="#E3E2DF"/><text x="${L-8}" y="${yv(top*t)+4}" text-anchor="end" font-size="11" fill="#6A6A6A">${top*t}</text>`).join('');
+  const bars = rows.map((r,i)=>{ const cx = L+gw*i+gw/2;
+    const b1 = `<rect x="${cx-bw-2}" y="${yv(r.nc)}" width="${bw}" height="${H-B-yv(r.nc)}" rx="3" fill="#3A3A3A"/>${r.nc?`<text x="${cx-bw/2-2}" y="${yv(r.nc)-5}" text-anchor="middle" font-size="11" fill="#151515">${r.nc}</text>`:''}`;
+    const b2 = `<rect x="${cx+2}" y="${yv(r.nf)}" width="${bw}" height="${H-B-yv(r.nf)}" rx="3" fill="#C9A227"/>${r.nf?`<text x="${cx+bw/2+2}" y="${yv(r.nf)-5}" text-anchor="middle" font-size="11" fill="#151515">${r.nf}</text>`:''}`;
+    return b1+b2+`<text x="${cx}" y="${H-10}" text-anchor="middle" font-size="12" fill="#6A6A6A">${r.m.toLocaleDateString('es-VE',{month:'short'})}</text>`; }).join('');
+  const list = sales.filter(o=>f==='todas'||o.mode===f);
+  return `<h1>Ventas</h1>
+    <p class="muted small">Cuenta como venta todo pedido con pago verificado o crédito aprobado (en preparación, enviado, listo para retiro o entregado), según la fecha del pedido.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Ventas de contado este mes</div><div class="v num">${cur.nc}</div><div class="muted small">${usd(cur.vc)} · ${diff(cur.nc,prev.nc)}</div></div>
+      <div class="kpi"><div class="l">Ventas financiadas este mes</div><div class="v num">${cur.nf}</div><div class="muted small">${usd(cur.vf)} · ${diff(cur.nf,prev.nf)}</div></div>
+      <div class="kpi"><div class="l">Total vendido este mes</div><div class="v num">${usd(cur.vc+cur.vf)}</div><div class="muted small">${tot} venta${tot===1?'':'s'}</div></div>
+      <div class="kpi"><div class="l">% financiado este mes</div><div class="v num">${pct}%</div><div class="muted small">de las ventas del mes</div></div>
+    </div>
+    <div class="chart"><div class="row between" style="margin-bottom:8px"><h3>Ventas por mes</h3><span class="legend"><i style="background:#3A3A3A"></i>Contado <i style="background:#C9A227"></i>Financiado</span></div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas de contado y financiadas por mes">${grid}${bars}</svg></div>
+    <div class="tbl"><table class="t"><thead><tr><th>Mes</th><th class="r">Contado</th><th class="r">Monto contado</th><th class="r">Financiadas</th><th class="r">Monto financiado</th><th class="r">Total</th><th class="r">% financiado</th></tr></thead><tbody>
+      ${rows.slice().reverse().map(r=>{const t=r.nc+r.nf;return `<tr><td>${r.m.toLocaleDateString('es-VE',{month:'long',year:'numeric'})}</td><td class="r num">${r.nc}</td><td class="r num">${usd(r.vc)}</td><td class="r num">${r.nf}</td><td class="r num">${usd(r.vf)}</td><td class="r num"><b>${usd(r.vc+r.vf)}</b></td><td class="r num">${t?Math.round(r.nf*100/t):0}%</td></tr>`}).join('')}
+    </tbody></table></div>
+    <h2>Detalle de ventas</h2>
+    <div class="chips">${[['todas','Todas'],['contado','De contado'],['financiado','Financiadas']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="ven" data-v="${k}" aria-pressed="${f===k}">${l} <span class="num">(${k==='todas'?sales.length:sales.filter(o=>o.mode===k).length})</span></button>`).join('')}</div>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Forma de pago</th><th>Estado</th><th class="r">Total</th></tr></thead><tbody>
+    ${list.map(o=>{const c=o.creditId?C(o.creditId):null;return `<tr><td class="nw">${o.code}</td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}</td><td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}`).join('<br>')}</td>
+      <td>${o.mode==='financiado'?`<span class="tag warn">Financiada</span><div class="muted small">${c?`${c.code} · ${c.n} cuotas`:''}</div>`:`<span class="tag dark">Contado</span><div class="muted small">${METODOS[o.method].n}</div>`}</td><td>${tag(o.status)}</td><td class="r num nw">${usd(o.total)}</td></tr>`}).join('')}
+    </tbody></table></div>`:'<div class="empty">Todavía no hay ventas en este filtro.</div>'}`;
+}
 function aPedidos(){
   const f = S.admF.ped;
   const groups = {activos:['pendiente_pago','pago_en_revision','credito_en_evaluacion','pago_rechazado','preparando','listo_retiro','enviado'], despacho:['preparando','listo_retiro'], todos:null};
@@ -756,7 +799,7 @@ function aPedidos(){
   return `<h1>Pedidos y envíos</h1>
     <div class="chips">${[['activos','En curso'],['despacho','Por despachar'],['todos','Todos']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="ped" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Entrega</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>
-    ${list.map(o=>`<tr><td class="nw">${o.code}<div class="muted small">${o.mode==='contado'?'Contado':'Financiado'} · ${METODOS[o.method].n}</div></td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
+    ${list.map(o=>`<tr><td class="nw">${o.code}<div>${o.mode==='financiado'?'<span class="tag warn">Financiada</span>':'<span class="tag dark">Contado</span>'}</div></td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
       <td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}${i.color?` <span class="muted small">(${esc(i.color)})</span>`:''}`).join('<br>')}</td>
       <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · guía ${esc(o.tracking)}</div>`:''}</td>
       <td>${tag(o.status)}${o.st==='pendiente_pago'?`<div class="muted small">Vence ${fdt(o.deadline)}</div>`:''}</td><td class="r num nw">${usd(o.total)}</td>
@@ -768,10 +811,10 @@ function aPedidos(){
 function aInventario(){
   const live = ['pendiente_pago','pago_en_revision','credito_en_evaluacion','pago_rechazado'], done = ['preparando','listo_retiro','enviado','entregado'];
   const qty = (pid, sts) => sum(S.orders.filter(o=>sts.includes(o.st)).flatMap(o=>o.items).filter(i=>i.pid===pid),i=>i.qty);
-  return `<h1>Inventario</h1><p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago de un equipo para cambiarla entre “contado y cuotas” y “solo contado”. Para cambiar precios, fotos o agregar productos usa Supabase &gt; Table Editor &gt; productos.</p>
+  return `<h1>Inventario</h1><p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago de un equipo para cambiarla entre “contado o cuotas” y “solo contado”. Para cambiar precios, fotos o agregar productos usa Supabase &gt; Table Editor &gt; productos.</p>
     <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Forma de pago</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${S.products.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto'}</div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
-      <td class="nw"><button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado y cuotas':'Solo contado'}</button></td>
+      <td class="nw"><button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button></td>
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button></td></tr>`).join('')}
     </tbody></table></div>`;
@@ -847,18 +890,10 @@ function kycSections(n0){
       <div class="field" style="grid-column:1/-1"><label for="k-trabajo">¿Dónde trabajas o a qué te dedicas? <span class="muted">(opcional)</span></label><input id="k-trabajo" data-k="trabajo" value="${esc(k.trabajo)}"></div>
     </div>
   </section>
-  <section class="box"><h2><span class="stepn">${n++}</span>Referencia personal</h2>
-    <p class="muted small">Un familiar o amigo que te conozca. Solo lo contactaremos si no logramos ubicarte.</p>
-    <div class="fg">
-      <div class="field"><label for="k-refnom">Nombre y apellido</label><input id="k-refnom" data-k="refNom" value="${esc(k.refNom)}"></div>
-      <div class="field"><label for="k-reftel">Teléfono</label><input id="k-reftel" data-k="refTel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.refTel)}"></div>
-      <div class="field"><label for="k-refpar">Parentesco</label><select id="k-refpar" data-k="refPar"><option value="">Elige</option>${['Familiar','Pareja','Amigo','Compañero de trabajo','Vecino'].map(o=>`<option ${k.refPar===o?'selected':''}>${o}</option>`).join('')}</select></div>
-    </div>
-  </section>
-  <section class="box"><h2><span class="stepn">${n++}</span>Fotos de tu cédula</h2>
-    <p class="muted small">Desde el teléfono puedes tomar la foto aquí mismo. Que se lean bien los datos y no tenga reflejos.</p>
+  <section class="box"><h2><span class="stepn">${n++}</span>Fotos</h2>
+    <p class="muted small">Desde el teléfono puedes tomar las fotos aquí mismo. Que se vean nítidas, con buena luz y sin reflejos.</p>
     ${photoBox('cedula','Foto de tu cédula','La parte de adelante, completa y nítida.','environment')}
-    ${photoBox('selfie','Selfie sosteniendo tu cédula','Tu cara y la cédula deben verse en la misma foto.','user')}
+    ${photoBox('selfie','Una foto tuya','De frente, sin lentes oscuros ni gorra.','user')}
   </section>`;
 }
 function kycErrors(){
@@ -868,10 +903,8 @@ function kycErrors(){
   if(!k.estado || k.ciudad.trim().length<3 || k.dir.trim().length<8) return 'Completa tu dirección: estado, ciudad y dirección.';
   if(k.lat==null && !k.locSkip) return 'Pulsa “Compartir mi ubicación actual”.';
   if(!k.ocup || !k.ingreso) return 'Indica tu ocupación e ingreso aproximado.';
-  if(k.refNom.trim().split(/\s+/).length<2) return 'Escribe nombre y apellido de tu referencia.';
-  if(!telOk(k.refTel)) return 'El teléfono de la referencia debe tener 11 números, por ejemplo 04141234567.';
   if(!k.cedula) return 'Agrega la foto de tu cédula.';
-  if(!k.selfie) return 'Agrega tu selfie sosteniendo la cédula.';
+  if(!k.selfie) return 'Agrega una foto tuya.';
   return '';
 }
 async function compressImg(file, max=1600){
@@ -897,7 +930,7 @@ async function sendKyc(){
   const k = S.kyc;
   const [c1, c2] = [await uploadDoc(k.cedula, 'cedula'), await uploadDoc(k.selfie, 'selfie')];
   await rpc('completar_verificacion', {p:{fecha_nacimiento:k.nac, estado:k.estado, ciudad:k.ciudad, direccion:k.dir, ocupacion:k.ocup, lugar_trabajo:k.trabajo,
-    ingreso_rango:k.ingreso, ref_nombre:k.refNom, ref_telefono:normTel(k.refTel), ref_parentesco:k.refPar, cedula_foto:c1, selfie_foto:c2,
+    ingreso_rango:k.ingreso, cedula_foto:c1, selfie_foto:c2,
     lat:k.lat==null?'':String(k.lat), lng:k.lng==null?'':String(k.lng), precision:k.acc==null?'':String(Math.round(k.acc))}});
   S.kyc = null;
 }
@@ -907,35 +940,22 @@ function vRegistro(){
   if(me()) return vCuenta();
   const k = kycInit();
   return `<div class="crumbs"><button data-act="go" data-v="login">Ingresar</button>›<span>Crear cuenta</span></div>
-  <h1 style="margin-bottom:6px">Crear cuenta</h1>
-  <p class="muted" style="margin-bottom:18px;max-width:70ch">Como ofrecemos financiamiento, pedimos algunos datos y una foto de tu cédula para verificar tu identidad. Toma unos 3 minutos. Tus datos son privados.</p>
-  <div class="two">
-  <div class="costeps">
-    <section class="box"><h2><span class="stepn">1</span>Tus datos</h2>
+  <div style="max-width:620px;margin:0 auto;display:grid;gap:16px">
+    <div><h1>Crear cuenta</h1><p class="muted" style="margin-top:6px">Con tu cuenta puedes comprar de contado de inmediato. Si quieres pagar en cuotas, te pediremos verificar tu identidad en ese momento.</p></div>
+    <section class="box">
       <div class="fg">
         <div class="field" style="grid-column:1/-1"><label for="r-name">Nombre y apellido</label><input id="r-name" data-k="nombre" value="${esc(k.nombre)}" autocomplete="name"></div>
         <div class="field"><label for="r-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('r', k.tipo, k.ced)}</div>
-        <div class="field"><label for="r-nac">Fecha de nacimiento</label><input id="r-nac" type="date" data-k="nac" value="${esc(k.nac)}" max="${new Date().toISOString().slice(0,10)}"></div>
         <div class="field"><label for="r-tel">Teléfono <span class="muted">(solo números)</span></label><input id="r-tel" data-k="tel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.tel)}" autocomplete="tel"></div>
-        <div class="field"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
+        <div class="field" style="grid-column:1/-1"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
         <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
       </div>
+      <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}>Acepto los términos de venta y la política de privacidad.</label>
+      ${k.err?`<div class="note bad small">${esc(k.err)}</div>`:''}
+      <button class="btn buy block" data-act="doregister">${S.busy?'Creando cuenta…':'Crear cuenta'}</button>
+      <span class="muted small">¿Ya tienes cuenta? <button class="link small" data-act="go" data-v="login">Ingresa aquí</button></span>
     </section>
-    ${kycSections(2)}
-  </div>
-  <aside class="box sum"><h2>Antes de enviar</h2>
-    <ul class="checklist">
-      <li class="${k.nombre&&k.ced&&k.tel&&k.email&&k.pass?'ok':''}">Tus datos</li>
-      <li class="${k.estado&&k.dir&&(k.lat!=null||k.locSkip)?'ok':''}">Dirección y ubicación</li>
-      <li class="${k.ocup&&k.ingreso?'ok':''}">Trabajo e ingresos</li>
-      <li class="${k.refNom&&k.refTel?'ok':''}">Referencia personal</li>
-      <li class="${k.cedula&&k.selfie?'ok':''}">Fotos de la cédula</li>
-    </ul>
-    <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}>Declaro que mis datos son verdaderos y autorizo su verificación. Acepto los términos de venta y la política de privacidad.</label>
-    ${k.err?`<div class="note bad small">${esc(k.err)}</div>`:''}
-    <button class="btn buy block" data-act="doregister">${S.busy?'Creando cuenta…':'Crear cuenta'}</button>
-    <span class="muted small">¿Ya tienes cuenta? <button class="link small" data-act="go" data-v="login">Ingresa aquí</button></span>
-  </aside></div>`;
+  </div>`;
 }
 async function doRegister(){
   const k = kycInit(); k.err = '';
@@ -946,29 +966,25 @@ async function doRegister(){
   if(!/^0\d{10}$/.test(tel)) return fail('Escribe tu teléfono de 11 números, por ejemplo 04141234567.');
   if(!/^\S+@\S+\.\S+$/.test(em)) return fail('Escribe un correo válido.');
   if(k.pass.length<8 || !/\d/.test(k.pass)) return fail('La contraseña debe tener al menos 8 caracteres y un número.');
-  const ke = kycErrors(); if(ke) return fail(ke);
-  if(normTel(k.refTel)===tel) return fail('El teléfono de la referencia debe ser distinto al tuyo.');
-  if(!k.terms) return fail('Marca la casilla de autorización para continuar.');
+  if(!k.terms) return fail('Acepta los términos para continuar.');
   const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, cedula:`${k.tipo}-${ced}`, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
   if(error) return fail(/already registered|already been registered/i.test(error.message) ? 'Ya existe una cuenta con ese correo. Ingresa con tu contraseña.'
     : /Database error/i.test(error.message) ? 'Esa cédula ya está registrada en otra cuenta.' : /Password/i.test(error.message) ? 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.' : friendly(error));
-  if(!data.session){ toast('Te enviamos un correo para confirmar tu cuenta. Ábrelo, ingresa y termina la verificación en Mi cuenta.'); go('login'); return; }
-  S.session = data.session;
-  try{ await sendKyc(); }
-  catch(e){ await loadPrivate(); S.acct='verificacion'; toast('Tu cuenta se creó, pero falta terminar la verificación: ' + friendly(e)); go('cuenta'); return; }
-  await loadPrivate(); toast(`Cuenta creada. Bienvenido, ${name.split(' ')[0]}. Revisaremos tus documentos pronto.`); afterLogin();
+  S.kyc = null;
+  if(!data.session){ toast('Te enviamos un correo para confirmar tu cuenta. Ábrelo y luego ingresa.'); go('login'); return; }
+  S.session = data.session; await loadPrivate(); toast(`Cuenta creada. Bienvenido, ${name.split(' ')[0]}.`); afterLogin();
 }
 function verifPanel(){
   const u = me(); const v = u.verif;
-  if(v==='verificado') return `<h1>Verificación</h1><div class="note ok">Tu identidad está verificada. Ya puedes comprar y solicitar financiamiento.</div>`;
-  if(v==='pendiente') return `<h1>Verificación</h1><div class="note warn">Recibimos tus documentos y los estamos revisando. Mientras tanto ya puedes hacer pedidos; los créditos se aprueban cuando terminemos la revisión.</div>`;
+  if(v==='verificado') return `<h1>Verificación</h1><div class="note ok">Tu identidad está verificada. Puedes comprar de contado y en cuotas.</div>`;
+  if(v==='pendiente') return `<h1>Verificación</h1><div class="note">Recibimos tus documentos. Ya puedes solicitar compras en cuotas; revisaremos tu identidad junto con tu primera solicitud.</div>${S.after==='checkout'?'<div><button class="btn buy" data-act="go" data-v="checkout">Volver a mi compra</button></div>':''}`;
   kycInit(u);
-  return `<h1>Verificación de identidad</h1>
-    ${v==='rechazado'?`<div class="note bad">No pudimos verificar tus documentos${u.verifNota?': '+esc(u.verifNota):''}. Vuelve a enviarlos.</div>`:`<div class="note info">Para comprar o solicitar financiamiento necesitamos verificar tu identidad. Toma unos 2 minutos.</div>`}
+  return `<h1>Verificación para comprar en cuotas</h1>
+    ${v==='rechazado'?`<div class="note bad">No pudimos verificar tus documentos${u.verifNota?': '+esc(u.verifNota):''}. Vuelve a enviarlos.</div>`:`<p class="muted">Solo la pedimos para comprar en cuotas. Toma unos 2 minutos y no tienes que esperar: puedes hacer tu solicitud apenas la envíes.</p>`}
     <section class="box"><h2><span class="stepn">1</span>Fecha de nacimiento</h2><div class="field" style="max-width:260px"><input id="k-nac" type="date" data-k="nac" value="${esc(S.kyc.nac)}" aria-label="Fecha de nacimiento"></div></section>
     ${kycSections(2)}
     ${S.kyc.err?`<div class="note bad small">${esc(S.kyc.err)}</div>`:''}
-    <div><button class="btn buy" data-act="dokyc">${S.busy?'Enviando…':'Enviar verificación'}</button></div>`;
+    <div><button class="btn buy" data-act="dokyc">${S.busy?'Enviando…':S.after==='checkout'?'Enviar y volver a mi compra':'Enviar verificación'}</button></div>`;
 }
 
 /* ===================== trabaja con nosotros ===================== */
@@ -1030,6 +1046,7 @@ function aClientes(){
   const list = all.filter(u=>f==='todos'||u.verif===f).sort((a,b)=>b.created-a.created);
   const cnt = v => all.filter(u=>u.verif===v).length;
   return `<h1>Clientes</h1>
+    <p class="muted small">Los documentos solo se piden a quien quiere comprar en cuotas. Al aprobar su primer crédito, la identidad queda verificada automáticamente.</p>
     <div class="chips">${[['pendiente','Por revisar'],['verificado','Verificados'],['rechazado','Rechazados'],['incompleto','Sin documentos'],['todos','Todos']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="cli" data-v="${k}" aria-pressed="${f===k}">${l} <span class="num">(${k==='todos'?all.length:cnt(k)})</span></button>`).join('')}</div>
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Cliente</th><th>Cédula</th><th>Teléfono</th><th>Ubicación</th><th>Registro</th><th>Identidad</th><th></th></tr></thead><tbody>
     ${list.map(u=>`<tr><td><b>${esc(u.name)}</b><div class="muted small">${esc(u.email)}</div></td><td class="nw">${esc(u.cedula)}</td><td class="nw">${esc(u.phone)}</td>
@@ -1045,16 +1062,15 @@ function clienteModal(uid){
     <div class="row between">${verifTag(u.verif)}<span class="muted small">Registrado el ${fd(u.created)}</span></div>
     ${u.verifNota?`<div class="note small">${esc(u.verifNota)}</div>`:''}
     <div class="docs"><figure><div id="doc-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure>
-      <figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Selfie con cédula</figcaption></figure></div>
+      <figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure></div>
     <dl class="dl">
       <dt>Cédula</dt><dd>${esc(u.cedula)}</dd><dt>Nacimiento</dt><dd>${u.nac?`${fd(dateOnly(u.nac))} (${e} años)`:'—'}</dd>
       <dt>Teléfono</dt><dd>${esc(u.phone)} ${u.phone?`<a class="link small" href="https://wa.me/${waNum(u.phone)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd><dt>Correo</dt><dd>${esc(u.email)}</dd>
       <dt>Dirección</dt><dd>${esc(u.addr)}${u.city?', '+esc(u.city):''}${u.estadoVzla?', '+esc(u.estadoVzla):''}</dd>
       <dt>Ubicación</dt><dd>${map?`<a class="link" href="${map}" target="_blank" rel="noopener">Ver en el mapa</a> <span class="muted small">(±${u.acc||'?'} m)</span>`:'No compartida'}</dd>
       <dt>Ocupación</dt><dd>${esc(u.ocup||'—')}${u.trabajo?' · '+esc(u.trabajo):''}</dd><dt>Ingreso</dt><dd>${esc(ingreso)}</dd>
-      <dt>Referencia</dt><dd>${esc(u.refNom||'—')}${u.refPar?' ('+esc(u.refPar)+')':''} ${u.refTel?`· ${esc(u.refTel)} <a class="link small" href="https://wa.me/${waNum(u.refTel)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd>
     </dl>
-    ${u.verif!=='incompleto'?`<div class="field"><label for="cv-nota">Motivo si rechazas</label><select id="cv-nota"><option>La foto de la cédula no es legible</option><option>La selfie no coincide con la cédula</option><option>Los datos no coinciden con la cédula</option><option>No pudimos confirmar la referencia</option></select></div>`:''}`,
+    ${u.verif!=='incompleto'?`<div class="field"><label for="cv-nota">Motivo si rechazas</label><select id="cv-nota"><option>La foto de la cédula no es legible</option><option>La foto de la persona no coincide con la cédula</option><option>Los datos no coinciden con la cédula</option><option>La dirección no se pudo confirmar</option></select></div>`:''}`,
     `<button class="btn" data-act="edo" data-u="${u.id}">Estado de cuenta</button>${u.verif!=='incompleto'?`<button class="btn danger" data-act="clirev" data-u="${u.id}" data-v="rechazado">Rechazar</button><button class="btn buy" data-act="clirev" data-u="${u.id}" data-v="verificado">Verificar identidad</button>`:''}`, true);
   [['cedula',u.cedulaFoto],['selfie',u.selfieFoto]].forEach(([k,p])=>{ if(!p) return;
     sb.storage.from('documentos').createSignedUrl(p, 600).then(({data,error})=>{ const el=$('#doc-'+k); if(!el||M.uid!==uid) return;
@@ -1067,8 +1083,8 @@ function aPostulaciones(){
   return `<h1>Postulaciones</h1>
     <p class="muted small">Personas que quieren trabajar promocionando y vendiendo equipos. Llegan desde “Trabaja con nosotros”.</p>
     <div class="chips">${[['activas','En proceso'],['nueva','Nuevas'],['contratada','Contratadas'],['descartada','Descartadas'],['todas','Todas']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="pos" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
-    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Postulación</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Interés</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${list.map(p=>{const [l,c]=POSTEST[p.estado]||['',''];const interes=Object.entries(p.respuestas).find(([k])=>/hacer|cargo/i.test(k));return `<tr><td class="nw">${p.codigo}</td><td><b>${esc(p.nombre)}</b><div class="muted small">${esc(p.cedula)}</div></td><td class="nw">${esc(p.telefono)}</td><td>${esc(p.ciudad)}</td><td class="small">${esc(interes?interes[1]:'—')}</td><td class="nw">${fd(p.creado)}</td><td><span class="tag ${c}">${l}</span></td>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Postulación</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Disponibilidad</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${list.map(p=>{const [l,c]=POSTEST[p.estado]||['',''];const interes=Object.entries(p.respuestas).find(([k])=>/tiempo|disponib/i.test(k));return `<tr><td class="nw">${p.codigo}</td><td><b>${esc(p.nombre)}</b><div class="muted small">${esc(p.cedula)}</div></td><td class="nw">${esc(p.telefono)}</td><td>${esc(p.ciudad)}</td><td class="small">${esc(interes?interes[1]:'—')}</td><td class="nw">${fd(p.creado)}</td><td><span class="tag ${c}">${l}</span></td>
       <td class="nw"><a class="btn sm" href="https://wa.me/${waNum(p.telefono)}?text=${encodeURIComponent(`Hola ${p.nombre.split(' ')[0]}, te escribimos de ${BRAND.a}${BRAND.b} por tu postulación ${p.codigo}.`)}" target="_blank" rel="noopener">WhatsApp</a> <button class="btn sm brand" data-act="post" data-p="${p.id}">Ver</button></td></tr>`}).join('')}
     </tbody></table></div>`:'<div class="empty">No hay postulaciones en este filtro.</div>'}`;
 }
@@ -1113,20 +1129,25 @@ function reviewModal(id){
   let extra = '';
   if(p.kind==='inicial'){ const c=C(p.creditId), h=historial(p.userId);
     extra = `<dt>Crédito</dt><dd>${c.code} · ${c.n} cuotas de ${usd(r2(c.financed/c.n))}</dd><dt>Financiado</dt><dd>${usd(c.financed)} (inicial ${Math.round(c.iniPct*100)}%)</dd>
-      <dt>Identidad</dt><dd>${verifTag(u.verif)} <button class="link small" data-act="cliente" data-u="${u.id}">Ver documentos</button></dd>
+      <dt>Identidad</dt><dd>${verifTag(u.verif)} <button class="link small" data-act="cliente" data-u="${u.id}">Ver datos completos</button></dd>
       <dt>Cupo</dt><dd id="rc-cupo">Consultando…</dd><dt>Historial</dt><dd>${h.n} pedidos · ${h.liq} crédito(s) pagado(s) · ${h.moras} cuota(s) con mora</dd>`;
     sb.rpc('cupo_cliente', {p_usuario:p.userId}).then(({data})=>{ const el=$('#rc-cupo'); if(el && data) el.textContent = `${usd(data.limite)} · usado ${usd(data.usado)} (incluye esta solicitud)`; }); }
   if(p.kind==='cuota'){ const c=C(p.creditId); extra = `<dt>Cuotas</dt><dd>${p.cuotas.map(n=>{const q=c.cuotas.find(x=>x.n===n);return `${n} (${usd(q.amount)}${q.mora?` + ${usd(q.mora)} mora`:''})`}).join(', ')}</dd>`; }
   if(p.kind==='contado'){ const o=O(p.orderId); extra = `<dt>Pedido</dt><dd>${o.items.map(i=>`${i.qty} × ${esc(i.name)}`).join(', ')}</dd><dt>Entrega</dt><dd>${esc(S.cfg.envio[o.ship.method]?.n||'')}</dd>`; }
-  const okL = p.kind==='contado'?'Verificar pago':p.kind==='inicial'?'Aprobar crédito':'Verificar cuota';
+  const okL = p.kind==='contado'?'Verificar pago':p.kind==='inicial'?(u.verif==='pendiente'?'Aprobar crédito y verificar identidad':'Aprobar crédito'):'Verificar cuota';
+  const docs = p.kind==='inicial' ? `<div class="docs"><figure><div id="rv-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure><figure><div id="rv-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure></div>` : '';
   modal(`Revisar ${p.code}`, `
     ${short?`<div class="note warn small">El monto reportado equivale a ${usd(reportedUSD(p))} y se esperaban ${usd(p.expected)}. Faltan ${usd(-diff)}.</div>`:`<div class="note ok small">El monto reportado cubre el monto esperado.</div>`}
     <div class="rcpt"><div id="rc-img" class="muted small">${p.path?'Cargando comprobante…':'Sin imagen adjunta.'}</div>
       <dl class="dl"><dt>Cliente</dt><dd>${esc(u.name)}<div class="muted small">${esc(u.cedula)} · ${esc(u.phone)}</div></dd><dt>Concepto</dt><dd>${concept(p)}</dd>
         <dt>Método</dt><dd>${METODOS[p.method].n}${p.bank?' · '+esc(p.bank):''}</dd><dt>Referencia</dt><dd>${esc(p.ref)}</dd><dt>Recibido</dt><dd>${fdt(p.created)}</dd>
         <dt>Esperado</dt><dd class="num">${usd(p.expected)}${p.currency==='Bs'?` · ${bs(r2(p.expected*p.tasa))}`:''}</dd><dt>Reportado</dt><dd class="num">${amtTxt(p)}</dd>${p.currency==='Bs'?`<dt>Tasa usada</dt><dd>${bs(p.tasa)}</dd>`:''}${extra}</dl></div>
-    <div class="field"><label for="rv-note">Motivo si rechazas</label><select id="rv-note"><option>La referencia no aparece en el banco</option><option>El monto recibido es incompleto</option><option>La imagen no es legible</option><option>El titular no coincide con el cliente</option></select></div>`,
+    ${docs}
+    <div class="field"><label for="rv-note">Motivo si rechazas</label><select id="rv-note"><option>La referencia no aparece en el banco</option><option>El monto recibido es incompleto</option><option>La imagen no es legible</option><option>El titular no coincide con el cliente</option>${p.kind==='inicial'?'<option>No pudimos verificar la identidad del cliente</option>':''}</select></div>`,
     `${p.kind==='inicial'?`<button class="btn danger" data-act="rejcredit" data-p="${p.id}">Rechazar crédito</button>`:''}<button class="btn danger" data-act="rejpay" data-p="${p.id}">Rechazar comprobante</button><button class="btn buy" data-act="approve" data-p="${p.id}">${short?okL+' de todos modos':okL}</button>`, true);
+  if(p.kind==='inicial') [['cedula',u.cedulaFoto],['selfie',u.selfieFoto]].forEach(([k2,pp])=>{ if(!pp) return;
+    sb.storage.from('documentos').createSignedUrl(pp, 600).then(({data,error})=>{ const el=$('#rv-'+k2); if(!el||M.id!==id) return;
+      el.innerHTML = error||!data?.signedUrl ? 'No se pudo cargar.' : `<a href="${esc(data.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(data.signedUrl)}" alt="${k2}"></a>`; }); });
   if(p.path) sb.storage.from('comprobantes').createSignedUrl(p.path, 600).then(({data, error})=>{
     const el = $('#rc-img'); if(!el || M.id!==id) return;
     if(error || !data?.signedUrl){ el.textContent = 'No se pudo cargar el comprobante.'; return; }
@@ -1276,9 +1297,10 @@ async function submitPay(){
 
 const ACT = {
   ffin: d => { S.f.fin = d.v; render(); },
+  goverif: () => { S.after = 'checkout'; S.acct = 'verificacion'; go('cuenta'); render(); },
   doregister: () => run(doRegister),
   dokyc: () => run(async()=>{ const k = S.kyc; k.err = kycErrors(); if(k.err) return render();
-    try{ await sendKyc(); await refresh(); toast('Recibimos tus documentos. Te avisaremos cuando estén verificados.'); }
+    try{ await sendKyc(); await refresh(); toast('Listo, recibimos tus documentos.'); if(S.after==='checkout'){ S.after=null; S.co && (S.co.mode='financiado'); go('checkout'); } }
     catch(e){ k.err = friendly(e); render(); } }),
   geoloc: () => { const k = kycInit(me());
     if(!navigator.geolocation){ k.locSkip = true; k.locMsg = 'Tu navegador no permite compartir la ubicación. Revisaremos tu dirección manualmente.'; return render(); }
