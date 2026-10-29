@@ -892,8 +892,8 @@ function kycSections(n0){
   </section>
   <section class="box"><h2><span class="stepn">${n++}</span>Fotos</h2>
     <p class="muted small">Desde el teléfono puedes tomar las fotos aquí mismo. Que se vean nítidas, con buena luz y sin reflejos.</p>
-    ${photoBox('cedula','Foto de tu cédula','La parte de adelante, completa y nítida.','environment')}
-    ${photoBox('selfie','Una foto tuya','De frente, sin lentes oscuros ni gorra.','user')}
+    ${photoBox('selfie','1. Una foto tuya','Solo tu cara, de frente, sin lentes oscuros ni gorra.','user')}
+    ${photoBox('cedula','2. Foto de tu cédula','La parte de adelante, completa y nítida.','environment')}
   </section>`;
 }
 function kycErrors(){
@@ -903,8 +903,8 @@ function kycErrors(){
   if(!k.estado || k.ciudad.trim().length<3 || k.dir.trim().length<8) return 'Completa tu dirección: estado, ciudad y dirección.';
   if(k.lat==null && !k.locSkip) return 'Pulsa “Compartir mi ubicación actual”.';
   if(!k.ocup || !k.ingreso) return 'Indica tu ocupación e ingreso aproximado.';
-  if(!k.cedula) return 'Agrega la foto de tu cédula.';
   if(!k.selfie) return 'Agrega una foto tuya.';
+  if(!k.cedula) return 'Agrega la foto de tu cédula.';
   return '';
 }
 async function compressImg(file, max=1600){
@@ -1061,8 +1061,8 @@ function clienteModal(uid){
   modal(`Cliente · ${esc(u.name)}`, `
     <div class="row between">${verifTag(u.verif)}<span class="muted small">Registrado el ${fd(u.created)}</span></div>
     ${u.verifNota?`<div class="note small">${esc(u.verifNota)}</div>`:''}
-    <div class="docs"><figure><div id="doc-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure>
-      <figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure></div>
+    <div class="docs"><figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure>
+      <figure><div id="doc-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure></div>
     <dl class="dl">
       <dt>Cédula</dt><dd>${esc(u.cedula)}</dd><dt>Nacimiento</dt><dd>${u.nac?`${fd(dateOnly(u.nac))} (${e} años)`:'—'}</dd>
       <dt>Teléfono</dt><dd>${esc(u.phone)} ${u.phone?`<a class="link small" href="https://wa.me/${waNum(u.phone)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd><dt>Correo</dt><dd>${esc(u.email)}</dd>
@@ -1135,7 +1135,7 @@ function reviewModal(id){
   if(p.kind==='cuota'){ const c=C(p.creditId); extra = `<dt>Cuotas</dt><dd>${p.cuotas.map(n=>{const q=c.cuotas.find(x=>x.n===n);return `${n} (${usd(q.amount)}${q.mora?` + ${usd(q.mora)} mora`:''})`}).join(', ')}</dd>`; }
   if(p.kind==='contado'){ const o=O(p.orderId); extra = `<dt>Pedido</dt><dd>${o.items.map(i=>`${i.qty} × ${esc(i.name)}`).join(', ')}</dd><dt>Entrega</dt><dd>${esc(S.cfg.envio[o.ship.method]?.n||'')}</dd>`; }
   const okL = p.kind==='contado'?'Verificar pago':p.kind==='inicial'?(u.verif==='pendiente'?'Aprobar crédito y verificar identidad':'Aprobar crédito'):'Verificar cuota';
-  const docs = p.kind==='inicial' ? `<div class="docs"><figure><div id="rv-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure><figure><div id="rv-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure></div>` : '';
+  const docs = p.kind==='inicial' ? `<div class="docs"><figure><div id="rv-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure><figure><div id="rv-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure></div>` : '';
   modal(`Revisar ${p.code}`, `
     ${short?`<div class="note warn small">El monto reportado equivale a ${usd(reportedUSD(p))} y se esperaban ${usd(p.expected)}. Faltan ${usd(-diff)}.</div>`:`<div class="note ok small">El monto reportado cubre el monto esperado.</div>`}
     <div class="rcpt"><div id="rc-img" class="muted small">${p.path?'Cargando comprobante…':'Sin imagen adjunta.'}</div>
