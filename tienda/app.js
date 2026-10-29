@@ -114,10 +114,10 @@ const S = {
   today: new Date(), cfg:null, products:[], session:null, me:null,
   users:[], orders:[], credits:[], payments:[], notifs:[], audit:[], cupo:null,
   cart: loadCart(), coupon:'', route:{v:'inicio'}, after:null,
-  f:{cat:null, brands:[], max:'', fin:false, stock:false, sort:'rel', q:''},
+  f:{cat:null, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''},
   pd:{color:0, storage:0, qty:1}, sim:null,
-  co:null, acct:'resumen', adm:'resumen', admF:{pagos:'todos', cred:'todos', ped:'activos'},
-  busy:false, ready:false,
+  co:null, acct:'resumen', adm:'resumen', admF:{pagos:'todos', cred:'todos', ped:'activos', cli:'pendiente', pos:'activas'},
+  busy:false, ready:false, kyc:null, post:null, posts:[],
 };
 let sb = null;
 const P = id => S.products.find(p=>p.id===id);
@@ -137,14 +137,17 @@ function mapCfg(c){
     plans:Object.fromEntries(Object.entries(c.planes).map(([k,v])=>[k,+v])), reservaHoras:c.reserva_horas,
     cupoBase:+c.cupo_base, cupoPorLiq:+c.cupo_por_liquidado, cupoMax:+c.cupo_max, maxCreditos:c.max_creditos,
     envio:Object.fromEntries(Object.entries(c.envio).map(([k,v])=>[k,{n:v.nombre, c:+v.costo, d:v.detalle}])),
-    envioGratis:+c.envio_gratis_desde, cupon:{code:c.cupon_codigo||'', pct:+c.cupon_pct}, datosPago:c.datos_pago||{} };
+    envioGratis:+c.envio_gratis_desde, cupon:{code:c.cupon_codigo||'', pct:+c.cupon_pct}, datosPago:c.datos_pago||{}, postulacion:c.postulacion||null };
 }
 function mapProduct(p){
   return { id:p.id, brand:p.marca, name:p.nombre, cat:p.categoria, shape:p.forma, price:+p.precio, stock:p.stock,
     colors:(p.colores && p.colores.length ? p.colores : [{n:'Único', hex:'#777'}]), storages:(p.capacidades && p.capacidades.length ? p.capacidades : null),
-    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo };
+    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo, fin:p.financiable!==false };
 }
-function mapUser(u){ return {id:u.id, name:u.nombre, cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en)}; }
+function mapUser(u){ return {id:u.id, name:u.nombre, cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
+  verif:u.verificacion || (u.rol==='admin'?'verificado':'incompleto'), verifNota:u.verificacion_nota||'', nac:u.fecha_nacimiento||'', estadoVzla:u.estado_vzla||'', ocup:u.ocupacion||'', trabajo:u.lugar_trabajo||'',
+  ingreso:u.ingreso_rango||'', refNom:u.ref_nombre||'', refTel:u.ref_telefono||'', refPar:u.ref_parentesco||'', cedulaFoto:u.cedula_foto||'', selfieFoto:u.selfie_foto||'',
+  lat:u.ubic_lat!=null?+u.ubic_lat:null, lng:u.ubic_lng!=null?+u.ubic_lng:null, acc:u.ubic_precision}; }
 
 /* ===================== carga de datos ===================== */
 async function q(table, order){
@@ -189,6 +192,8 @@ async function loadPrivate(){
   if(S.me.role==='admin'){
     const bt = await q('bitacora',['id',false]);
     S.audit = bt.slice(0,400).map(a=>({at:new Date(a.creado_en), by:a.actor, msg:a.accion}));
+    try{ S.posts = (await q('postulaciones',['id',false])).map(p=>({id:p.id, codigo:p.codigo, nombre:p.nombre, cedula:p.cedula, telefono:p.telefono, ciudad:p.ciudad, respuestas:p.respuestas||{}, estado:p.estado, nota:p.nota, creado:new Date(p.creado_en)})); }
+    catch(e){ S.posts = []; }
   } else {
     const {data, error} = await sb.rpc('mi_cupo', {financiado:null});
     if(!error) S.cupo = data;
@@ -263,13 +268,13 @@ function pcard(p){
   const out = p.stock<=0; const n = midPlan();
   const opts = p.colors.length>1 || p.storages;
   return `<article class="pc">
-    <button class="ph" data-act="pd" data-id="${p.id}" aria-label="Ver ${esc(p.name)}">${img(p)}${out?'<span class="tag">Agotado</span>':p.price>=S.cfg.minFin?'<span class="tag ok">Financiable</span>':''}</button>
+    <button class="ph" data-act="pd" data-id="${p.id}" aria-label="Ver ${esc(p.name)}">${img(p)}${out?'<span class="tag">Agotado</span>':p.fin?'<span class="tag ok">En cuotas</span>':'<span class="tag dark">Solo contado</span>'}</button>
     <div class="bd">
       <span class="brandname">${esc(p.brand)}</span>
       <button class="nm" data-act="pd" data-id="${p.id}">${esc(p.name)}${p.storages?` ${esc(p.storages[0].n)}`:''}</button>
       <span class="sp">${esc(Object.values(p.specs).slice(0,2).join(' · '))}</span>
       <span class="pr num">${usd(p.price)}</span>
-      ${p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n))}</span>`:'<span class="sp">Solo pago de contado</span>'}
+      ${p.fin&&p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n))}</span>`:p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
       ${!out && p.stock<=5?`<span class="stk">${p.stock===1?'Última unidad':`Últimas ${p.stock} unidades`}</span>`:''}
       <button class="btn ${out?'':'buy'}" ${out?'disabled':''} data-act="${opts?'pd':'add'}" data-id="${p.id}">${out?'Sin existencia':opts?'Ver opciones':'Agregar al carrito'}</button>
     </div></article>`;
@@ -306,13 +311,13 @@ function renderChrome(){
     </div>`;
   const v = S.route.v;
   $('#cats').innerHTML = CATS.map(c=>`<button data-act="cat" data-v="${c}" aria-current="${v==='catalogo' && S.f.cat===c}">${c}</button>`).join('')
-    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat}">Todo el catálogo</button><button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button>`;
+    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat}">Todo el catálogo</button><button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
   const wa = waLink('Hola, quiero información sobre un equipo.');
   $('#foot').innerHTML = `<div class="wrap cols">
       <div><div class="logo">${logoHTML(true)}</div>
         <p style="margin-top:10px;max-width:34ch">Teléfonos, tablets y accesorios con garantía. Paga de contado o financia tu equipo en cuotas mensuales.</p></div>
       <div><h4>Comprar</h4><ul>${CATS.map(c=>`<li><button data-act="cat" data-v="${c}">${c}</button></li>`).join('')}</ul></div>
-      <div><h4>Ayuda</h4><ul><li><button data-act="go" data-v="financiamiento">Cómo funciona el financiamiento</button></li><li><button data-act="acct" data-v="pedidos">Seguir mi pedido</button></li><li><button data-act="acct" data-v="creditos">Pagar una cuota</button></li></ul></div>
+      <div><h4>Ayuda</h4><ul><li><button data-act="go" data-v="financiamiento">Cómo funciona el financiamiento</button></li><li><button data-act="acct" data-v="pedidos">Seguir mi pedido</button></li><li><button data-act="acct" data-v="creditos">Pagar una cuota</button></li><li><button data-act="go" data-v="trabaja">Trabaja con nosotros</button></li></ul></div>
       <div><h4>Contacto</h4><ul><li>${esc(BRAND.ciudad)}, Venezuela</li>${BRAND.horario?`<li>${esc(BRAND.horario)}</li>`:''}${wa?`<li><a class="wa" style="color:var(--gold-l)" href="${wa}" target="_blank" rel="noopener">${ico('chat')} WhatsApp</a></li>`:''}${BRAND.correo?`<li>${esc(BRAND.correo)}</li>`:''}<li>RIF ${esc(BRAND.rif)}</li></ul></div>
     </div>
     <div class="wrap bot"><span>© ${new Date().getFullYear()} ${esc(BRAND.legal)}. Todos los derechos reservados.</span></div>`;
@@ -356,7 +361,7 @@ function vInicio(){
 }
 function vCatalogo(){
   const f = S.f; const qs = f.q.trim().toLowerCase();
-  let list = S.products.filter(p=>(!f.cat||p.cat===f.cat) && (!f.brands.length||f.brands.includes(p.brand)) && (!f.max||p.price<=+f.max) && (!f.fin||p.price>=S.cfg.minFin) && (!f.stock||p.stock>0)
+  let list = S.products.filter(p=>(!f.cat||p.cat===f.cat) && (!f.brands.length||f.brands.includes(p.brand)) && (!f.max||p.price<=+f.max) && (!f.fin||(f.fin==='si'?p.fin:!p.fin)) && (!f.stock||p.stock>0)
     && (!qs || (p.name+' '+p.brand+' '+p.cat+' '+Object.values(p.specs).join(' ')).toLowerCase().includes(qs)));
   if(f.sort==='asc') list.sort((a,b)=>a.price-b.price);
   if(f.sort==='desc') list.sort((a,b)=>b.price-a.price);
@@ -370,12 +375,12 @@ function vCatalogo(){
       <div><h4>Marca</h4>${brands.map(b=>`<label class="ck"><input type="checkbox" data-on="fbrand" value="${esc(b)}" ${f.brands.includes(b)?'checked':''}>${esc(b)}</label>`).join('')}</div>
       <div><h4>Precio máximo</h4><div class="field"><select data-on="fmax" aria-label="Precio máximo"><option value="">Sin límite</option>${[100,200,300,500,800].map(v=>`<option value="${v}" ${+f.max===v?'selected':''}>Hasta ${usd(v)}</option>`).join('')}</select></div></div>
       <div><h4>Disponibilidad</h4>
-        <label class="ck"><input type="checkbox" data-on="ffin" ${f.fin?'checked':''}>Se puede financiar</label>
         <label class="ck"><input type="checkbox" data-on="fstock" ${f.stock?'checked':''}>Solo con existencia</label></div>
       ${(f.brands.length||f.max||f.fin||f.stock||f.q)?`<button class="link" data-act="clearf">Limpiar filtros</button>`:''}
     </aside>
     <div>
       <div class="toolbar"><div><h1 style="font-size:24px">${esc(f.cat||'Todo el catálogo')}</h1><span class="muted small">${list.length} producto${list.length===1?'':'s'}</span></div>
+        <div class="chips">${[['','Todos'],['si','En cuotas'],['no','Solo de contado']].map(([k,l])=>`<button class="chip" data-act="ffin" data-v="${k}" aria-pressed="${(f.fin||'')===k}">${l}</button>`).join('')}</div>
         <label class="row small">Ordenar por <select data-on="fsort" aria-label="Ordenar"><option value="rel">Relevancia</option><option value="asc" ${f.sort==='asc'?'selected':''}>Menor precio</option><option value="desc" ${f.sort==='desc'?'selected':''}>Mayor precio</option><option value="az" ${f.sort==='az'?'selected':''}>Nombre A–Z</option></select></label></div>
       ${list.length?`<div class="pgrid">${list.map(pcard).join('')}</div>`:`<div class="empty"><h2>No encontramos productos</h2><p>Prueba con otra búsqueda o quita algunos filtros.</p><button class="btn" data-act="clearf">Limpiar filtros</button></div>`}
     </div>
@@ -401,10 +406,10 @@ function vProducto(){
         <span class="small ${p.stock<=5?'stk':'muted'}">${p.stock===1?'Última unidad':p.stock<=5?`Últimas ${p.stock} unidades`:`${p.stock} disponibles`}</span>`}
       </div>
       <div class="row"><button class="btn buy" style="flex:1" ${out?'disabled':''} data-act="add" data-id="${p.id}">Agregar al carrito</button><button class="btn brand" style="flex:1" ${out?'disabled':''} data-act="buynow" data-id="${p.id}">Comprar ahora</button></div>
-      ${price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*S.cfg.inicialMin))}</div>
+      ${p.fin&&price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*S.cfg.inicialMin))}</div>
         <table class="t"><thead><tr><th>Plan</th><th class="r">Cuota mensual</th><th class="r">Total a pagar</th></tr></thead><tbody>
         ${Object.keys(S.cfg.plans).map(n=>{const fin=r2(price*(1-S.cfg.inicialMin)*(1+S.cfg.plans[n]));return `<tr><td>${n} cuotas</td><td class="r num"><b>${usd(r2(fin/n))}</b></td><td class="r num muted">${usd(r2(fin+price*S.cfg.inicialMin))}</td></tr>`}).join('')}
-        </tbody></table></div>`:`<div class="note">Este producto se vende solo de contado. Puedes financiarlo si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`}
+        </tbody></table></div>`:p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> Este equipo no está disponible en cuotas.</div>`}
       ${wa?`<a class="link wa" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Preguntar por WhatsApp</a>`:''}
     </div>
   </section>
@@ -437,7 +442,8 @@ function vCarrito(){
       <div class="muted small">${bs((t.subtotal-t.discount)*S.cfg.tasa)} a la tasa del día</div>
       ${S.cfg.cupon.code?`<form id="couponf" class="row" style="flex-wrap:nowrap"><div class="field" style="flex:1"><input id="cp" placeholder="Código de cupón" value="${esc(S.coupon)}" aria-label="Cupón"></div><button class="btn" type="submit">Aplicar</button></form>
       ${t.couponMsg?`<div class="small ${t.couponOk?'':'err'}">${t.couponMsg}</div>`:''}`:''}
-      ${t.subtotal>=S.cfg.minFin?`<div class="note ok small">Este carrito se puede financiar: inicial desde ${usd(r2((t.subtotal-t.discount)*S.cfg.inicialMin))}.</div>`:`<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más para poder financiar tu compra.</div>`}
+      ${(()=>{const nf=S.cart.filter(i=>!P(i.pid).fin); return nf.length?`<div class="note small">${nf.map(i=>esc(i.name)).join(', ')} ${nf.length>1?'se venden':'se vende'} solo de contado. Para pagar en cuotas, quítalo del carrito.</div>`
+        : t.subtotal>=S.cfg.minFin?`<div class="note ok small">Este carrito se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*S.cfg.inicialMin))}.</div>`:`<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más para poder pagar en cuotas.</div>`})()}
       <button class="btn buy block" data-act="tocheckout" ${S.cart.some(i=>i.qty>P(i.pid).stock)?'disabled':''}>Continuar compra</button>
       <button class="link" data-act="cat" data-v="">Seguir comprando</button>
     </aside>
@@ -452,9 +458,11 @@ function vCheckout(){
   if(!u){ S.after = 'checkout'; return vLogin('Inicia sesión o crea tu cuenta para completar tu compra o solicitar financiamiento.'); }
   if(isAdmin()) return `<div class="empty"><h2>Estás conectado como administrador</h2><p>Cierra sesión y entra con una cuenta de cliente para comprar.</p></div>`;
   if(!S.cart.length) return vCarrito();
+  if(['incompleto','rechazado'].includes(u.verif)) return `<div class="empty"><h2>Falta verificar tu identidad</h2><p>${u.verif==='rechazado'?'Tus documentos fueron rechazados. Vuelve a enviarlos para poder comprar.':'Antes de tu primera compra necesitamos la foto de tu cédula y algunos datos. Toma unos 2 minutos.'}</p><button class="btn buy" data-act="acct" data-v="verificacion">Verificar mi identidad</button></div>`;
   if(!S.co) S.co = {ship:u.addr?'local':'retiro', addr:u.addr||'', city:u.city||'', mode:'contado', n:midPlan(), ini:S.cfg.inicialMin, method:'pago_movil', later:false, when:'ahora', bank:BANKS[0], ref:'', amount:'', file:null, err:'', showPlan:false};
   const co = S.co, k = coCalc();
-  const canFin = k.base >= S.cfg.minFin;
+  const noFin = S.cart.filter(i=>!P(i.pid).fin);
+  const canFin = k.base >= S.cfg.minFin && !noFin.length;
   if(!canFin) co.mode='contado';
   co.when = (co.method==='efectivo' || co.later) ? 'despues' : 'ahora';
   if(co.method==='efectivo') co.ship='retiro';
@@ -486,7 +494,7 @@ function vCheckout(){
     <section class="box"><h2><span class="stepn">2</span>Forma de pago</h2>
       <div class="seg seg2">
         <label class="so"><input type="radio" name="mode" value="contado" data-on="mode" ${!fin?'checked':''}><span class="ot">De contado</span><span class="os">${usd(k.total)}</span></label>
-        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
+        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
       </div>
       ${fin?`
         <div class="seg seg3">${plans.map(n=>`<label class="so"><input type="radio" name="plan" value="${n}" data-on="plan" ${co.n===n?'checked':''}><span class="ot">${n} cuotas</span><span class="os">${usd(cuotaDe(n))} al mes</span></label>`).join('')}</div>
@@ -535,17 +543,9 @@ function vLogin(msg){
         <button class="link small" type="button" data-act="forgot">¿Olvidaste tu contraseña?</button>
       </form>
     </section>
-    <section class="box"><h2>Crear cuenta</h2><p class="muted small">Necesitas una cuenta para comprar o solicitar financiamiento. Tu cédula se usa para validar tus pagos.</p>
-      <form id="regf" class="field" style="gap:14px" novalidate>
-        <div class="fg"><div class="field"><label for="r-name">Nombre y apellido</label><input id="r-name" autocomplete="name"></div>
-          <div class="field"><label for="r-ced">Cédula</label><input id="r-ced" placeholder="V-12.345.678"></div></div>
-        <div class="fg"><div class="field"><label for="r-email">Correo</label><input id="r-email" type="email" autocomplete="email"></div>
-          <div class="field"><label for="r-tel">Teléfono</label><input id="r-tel" placeholder="0414-000-0000" autocomplete="tel"></div></div>
-        <div class="field"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
-        <label class="ck small"><input type="checkbox" id="r-terms">Acepto los términos de venta y la política de privacidad</label>
-        <div class="err" id="r-err"></div>
-        <button class="btn buy" type="submit">Crear cuenta</button>
-      </form>
+    <section class="box"><h2>¿Eres nuevo?</h2><p class="muted">Crea tu cuenta para comprar de contado o en cuotas. Te pediremos:</p>
+      <ul class="checklist plain"><li>Tus datos, cédula y teléfono (solo números)</li><li>Tu dirección y ubicación</li><li>Ocupación e ingreso aproximado</li><li>Una referencia personal</li><li>Foto de tu cédula y una selfie con ella (puedes tomarlas desde el teléfono)</li></ul>
+      <button class="btn buy" data-act="go" data-v="registro">Crear cuenta</button>
     </section></div>`;
 }
 function vNuevaClave(){
@@ -600,7 +600,8 @@ function vCuenta(){
   const pays = S.payments;
   const nf = S.notifs;
   const attn = ords.filter(o=>['pendiente_pago','pago_rechazado'].includes(o.st)).length + cr.filter(c=>c.st==='en_mora').length;
-  const tabs = [['resumen','Resumen',attn],['pedidos','Mis pedidos',0],['creditos','Mis créditos',cr.filter(c=>c.st==='en_mora').length],['pagos','Mis pagos',0],['notificaciones','Notificaciones',nf.filter(n=>!n.read).length],['datos','Mis datos',0]];
+  const needV = ['incompleto','rechazado'].includes(u.verif);
+  const tabs = [['resumen','Resumen',attn],['verificacion','Verificación',needV?1:0],['pedidos','Mis pedidos',0],['creditos','Mis créditos',cr.filter(c=>c.st==='en_mora').length],['pagos','Mis pagos',0],['notificaciones','Notificaciones',nf.filter(n=>!n.read).length],['datos','Mis datos',0]];
   const t = S.acct;
   let body='';
   if(t==='resumen'){
@@ -608,6 +609,7 @@ function vCuenta(){
     const nxt = cr.filter(c=>['activo','en_mora'].includes(c.st)).flatMap(c=>c.cuotas.filter(q=>q.status!=='pagada').map(q=>({c,q}))).sort((a,b)=>a.q.due-b.q.due)[0];
     const act = ords.filter(o=>!['entregado','cancelado'].includes(o.st));
     body = `<h1>Hola, ${esc(u.name.split(' ')[0])}</h1>
+      ${needV?`<div class="note ${u.verif==='rechazado'?'bad':'warn'}">${u.verif==='rechazado'?'No pudimos verificar tus documentos.':'Falta verificar tu identidad para poder comprar.'} <button class="link" data-act="acct" data-v="verificacion">Completar verificación</button></div>`:u.verif==='pendiente'?`<div class="note small">Estamos revisando tus documentos de identidad.</div>`:''}
       <div class="kpis">
         <div class="kpi"><div class="l">Pedidos en curso</div><div class="v num">${act.length}</div></div>
         <div class="kpi ${cr.some(c=>c.st==='en_mora')?'alert':''}"><div class="l">Saldo de créditos</div><div class="v num">${usd(deuda)}</div></div>
@@ -619,6 +621,7 @@ function vCuenta(){
       ${ords.filter(o=>o.st==='pago_rechazado').map(o=>`<div class="note bad">No pudimos verificar el pago del pedido ${o.code}. <button class="link" data-act="payorder" data-o="${o.id}">Subir nuevo comprobante</button></div>`).join('')}
       <h2>Pedidos en curso</h2>${act.length?act.map(orderCard).join(''):'<div class="empty">No tienes pedidos en curso.</div>'}`;
   }
+  if(t==='verificacion') body = verifPanel();
   if(t==='pedidos') body = `<h1>Mis pedidos</h1>${ords.length?ords.map(orderCard).join(''):'<div class="empty">Aún no has hecho pedidos.</div>'}`;
   if(t==='creditos') body = `<h1>Mis créditos</h1>${cr.length?cr.map(creditCard).join(''):`<div class="empty"><h2>No tienes créditos</h2><p>Puedes financiar compras desde ${usd(S.cfg.minFin)}.</p></div>`}`;
   if(t==='pagos') body = `<h1>Mis pagos</h1>${pays.length?`<div class="tbl"><table class="t"><thead><tr><th>Pago</th><th>Fecha</th><th>Concepto</th><th>Método</th><th>Referencia</th><th>Estado</th><th class="r">Monto</th></tr></thead><tbody>
@@ -627,7 +630,7 @@ function vCuenta(){
     if(nf.some(n=>!n.read)) setTimeout(async()=>{ const {error} = await sb.rpc('marcar_notificaciones_leidas'); if(!error){ nf.forEach(n=>n.read=true); renderChrome(); } }, 800); }
   if(t==='datos') body = `<h1>Mis datos</h1><section class="box"><form id="dataf" class="field" style="gap:14px">
       <div class="fg"><div class="field"><label>Nombre</label><input value="${esc(u.name)}" disabled></div><div class="field"><label>Cédula</label><input value="${esc(u.cedula)}" disabled></div>
-      <div class="field"><label>Correo</label><input value="${esc(u.email)}" disabled></div><div class="field"><label for="d-tel">Teléfono</label><input id="d-tel" value="${esc(u.phone)}"></div>
+      <div class="field"><label>Correo</label><input value="${esc(u.email)}" disabled></div><div class="field"><label for="d-tel">Teléfono <span class="muted">(solo números)</span></label><input id="d-tel" data-digits="11" inputmode="numeric" value="${esc(u.phone)}"></div>
       <div class="field" style="grid-column:1/-1"><label for="d-addr">Dirección principal</label><input id="d-addr" value="${esc(u.addr)}"></div><div class="field"><label for="d-city">Ciudad</label><input id="d-city" value="${esc(u.city)}"></div></div>
       <div><button class="btn brand" type="submit">Guardar cambios</button></div><span class="muted small">Para cambiar tu nombre o cédula escríbenos; los usamos para validar tus pagos.</span></form></section>`;
   return `<div class="panel"><nav class="side"><div class="who"><b>${esc(u.name)}</b><div class="muted small">Cliente desde ${fd(u.created)}</div></div>
@@ -673,8 +676,8 @@ function vAdmin(){
   const mora = S.credits.filter(c=>c.st==='en_mora');
   const toShip = S.orders.filter(o=>['preparando','listo_retiro','pendiente_pago'].includes(o.st));
   const low = S.products.filter(p=>p.stock<=5);
-  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['pedidos','Pedidos y envíos',toShip.length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]];
-  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, inventario:aInventario, config:aConfig, bitacora:aBitacora}[S.adm] || aResumen;
+  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',S.users.filter(x=>x.role==='cliente'&&x.verif==='pendiente').length],['postulaciones','Postulaciones',S.posts.filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]];
+  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, inventario:aInventario, clientes:aClientes, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm] || aResumen;
   return `<div class="panel"><nav class="side"><div class="who"><b>Administración</b><div class="muted small">${esc(u.name)}</div></div>
     ${tabs.map(([k,l,n])=>`<button data-act="adm" data-v="${k}" aria-current="${S.adm===k}">${l}${n?`<span class="c">${n}</span>`:''}</button>`).join('')}
     <button data-act="reload">Recargar información</button><button data-act="go" data-v="inicio">Ver tienda</button><button data-act="logout">Cerrar sesión</button></nav>
@@ -765,9 +768,10 @@ function aPedidos(){
 function aInventario(){
   const live = ['pendiente_pago','pago_en_revision','credito_en_evaluacion','pago_rechazado'], done = ['preparando','listo_retiro','enviado','entregado'];
   const qty = (pid, sts) => sum(S.orders.filter(o=>sts.includes(o.st)).flatMap(o=>o.items).filter(i=>i.pid===pid),i=>i.qty);
-  return `<h1>Inventario</h1><p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Para cambiar precios, fotos o agregar productos usa Supabase &gt; Table Editor &gt; productos.</p>
-    <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
+  return `<h1>Inventario</h1><p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago de un equipo para cambiarla entre “contado y cuotas” y “solo contado”. Para cambiar precios, fotos o agregar productos usa Supabase &gt; Table Editor &gt; productos.</p>
+    <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Forma de pago</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${S.products.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto'}</div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
+      <td class="nw"><button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado y cuotas':'Solo contado'}</button></td>
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button></td></tr>`).join('')}
     </tbody></table></div>`;
@@ -791,6 +795,291 @@ function aConfig(){
 function aBitacora(){
   return `<h1>Bitácora</h1><div class="tbl"><table class="t"><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th></tr></thead><tbody>
     ${S.audit.length?S.audit.map(a=>`<tr><td class="nw">${fdt(a.at)}</td><td class="nw">${esc(a.by)}</td><td>${esc(a.msg)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">Sin eventos.</td></tr>'}</tbody></table></div>`;
+}
+
+/* ===================== cédula, teléfono y verificación ===================== */
+const ESTADOS = ['Amazonas','Anzoátegui','Apure','Aragua','Barinas','Bolívar','Carabobo','Cojedes','Delta Amacuro','Distrito Capital','Falcón','Guárico','La Guaira','Lara','Mérida','Miranda','Monagas','Nueva Esparta','Portuguesa','Sucre','Táchira','Trujillo','Yaracuy','Zulia'];
+const OCUPACIONES = ['Empleado','Independiente o comerciante','Profesional libre','Estudiante','Jubilado o pensionado','Otro'];
+const INGRESOS = [['0-100','Menos de $100'],['100-300','$100 a $300'],['300-600','$300 a $600'],['600-1000','$600 a $1.000'],['1000+','Más de $1.000']];
+const VERIF = {incompleto:['Sin verificar','bad'], pendiente:['En revisión','warn'], verificado:['Verificada','ok'], rechazado:['Rechazada','bad']};
+const verifTag = v => { const [l,c] = VERIF[v] || VERIF.incompleto; return `<span class="tag ${c}">${l}</span>`; };
+const onlyDigits = s => String(s||'').replace(/\D/g,'');
+const normTel = s => { let d = onlyDigits(s); if(/^58\d{10}$/.test(d)) d = '0'+d.slice(2); if(/^[24]\d{9}$/.test(d)) d = '0'+d; return d; };
+const telOk = s => /^0\d{10}$/.test(normTel(s));
+const waNum = tel => { const d = normTel(tel); return d ? '58'+d.slice(1) : ''; };
+const edad = d => { if(!d) return null; const b = new Date(d+'T12:00:00'), t = new Date(); let a = t.getFullYear()-b.getFullYear(); if(t < new Date(t.getFullYear(), b.getMonth(), b.getDate())) a--; return a; };
+const cedField = (pre, tipo, num) => `<div class="cedrow"><select id="${pre}-tipo" data-k="${pre==='r'?'tipo':'ptipo'}" aria-label="Tipo de documento"><option ${tipo!=='E'?'selected':''}>V</option><option ${tipo==='E'?'selected':''}>E</option></select>
+  <input id="${pre}-ced" data-k="${pre==='r'?'ced':'pced'}" data-digits="9" inputmode="numeric" placeholder="12345678" value="${esc(num||'')}" autocomplete="off"></div>`;
+
+// Estado del formulario de verificación (sobrevive a los redibujados)
+function kycInit(u){
+  if(!S.kyc) S.kyc = {tipo:'V', ced:'', nombre:'', email:'', tel:'', pass:'', nac:'', estado:u?.estadoVzla||'', ciudad:u?.city||'', dir:u?.addr||'',
+    ocup:'', trabajo:'', ingreso:'', refNom:'', refTel:'', refPar:'', cedula:null, selfie:null, cedulaUrl:'', selfieUrl:'', lat:null, lng:null, acc:null, locMsg:'', locSkip:false, terms:false, err:''};
+  return S.kyc;
+}
+function photoBox(key, title, hint, captureMode){
+  const k = S.kyc, url = k[key+'Url'];
+  return `<div class="photo">
+    <div class="pv">${url?`<img src="${url}" alt="${esc(title)}">`:`<span>${key==='cedula'?ico('card'):ico('user')}</span>`}</div>
+    <div class="pt"><b>${title}</b><span class="muted small">${hint}</span>
+      <div class="row" style="margin-top:6px">
+        <label class="btn sm brand">Tomar foto<input type="file" accept="image/*" capture="${captureMode}" data-photo="${key}" hidden></label>
+        <label class="btn sm">Elegir de la galería<input type="file" accept="image/*" data-photo="${key}" hidden></label>
+      </div>${url?'<span class="small" style="color:var(--ok)">Foto lista ✓</span>':''}</div></div>`;
+}
+function kycSections(n0){
+  const k = S.kyc; let n = n0;
+  const loc = k.lat!=null ? `<span class="small" style="color:var(--ok)">Ubicación registrada ✓ (precisión aprox. ${Math.round(k.acc||0)} m)</span>` : k.locMsg ? `<span class="small ${k.locSkip?'muted':'err'}">${esc(k.locMsg)}</span>` : '';
+  return `
+  <section class="box"><h2><span class="stepn">${n++}</span>Dirección</h2>
+    <div class="fg">
+      <div class="field"><label for="k-estado">Estado</label><select id="k-estado" data-k="estado"><option value="">Elige tu estado</option>${ESTADOS.map(e=>`<option ${k.estado===e?'selected':''}>${e}</option>`).join('')}</select></div>
+      <div class="field"><label for="k-ciudad">Ciudad o municipio</label><input id="k-ciudad" data-k="ciudad" value="${esc(k.ciudad)}" autocomplete="address-level2"></div>
+      <div class="field" style="grid-column:1/-1"><label for="k-dir">Dirección de tu casa</label><input id="k-dir" data-k="dir" value="${esc(k.dir)}" placeholder="Urbanización, calle, casa o apartamento, punto de referencia" autocomplete="street-address"></div>
+    </div>
+    <div class="row"><button class="btn sm" data-act="geoloc">${ico('store')} ${k.lat!=null?'Actualizar mi ubicación':'Compartir mi ubicación actual'}</button>${loc}</div>
+    <p class="muted small">La usamos solo para validar tu dirección. Tu navegador te pedirá permiso.</p>
+  </section>
+  <section class="box"><h2><span class="stepn">${n++}</span>Trabajo e ingresos</h2>
+    <div class="fg">
+      <div class="field"><label for="k-ocup">Ocupación</label><select id="k-ocup" data-k="ocup"><option value="">Elige una opción</option>${OCUPACIONES.map(o=>`<option ${k.ocup===o?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label for="k-ingreso">Ingreso mensual aproximado</label><select id="k-ingreso" data-k="ingreso"><option value="">Elige un rango</option>${INGRESOS.map(([v,l])=>`<option value="${v}" ${k.ingreso===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:1/-1"><label for="k-trabajo">¿Dónde trabajas o a qué te dedicas? <span class="muted">(opcional)</span></label><input id="k-trabajo" data-k="trabajo" value="${esc(k.trabajo)}"></div>
+    </div>
+  </section>
+  <section class="box"><h2><span class="stepn">${n++}</span>Referencia personal</h2>
+    <p class="muted small">Un familiar o amigo que te conozca. Solo lo contactaremos si no logramos ubicarte.</p>
+    <div class="fg">
+      <div class="field"><label for="k-refnom">Nombre y apellido</label><input id="k-refnom" data-k="refNom" value="${esc(k.refNom)}"></div>
+      <div class="field"><label for="k-reftel">Teléfono</label><input id="k-reftel" data-k="refTel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.refTel)}"></div>
+      <div class="field"><label for="k-refpar">Parentesco</label><select id="k-refpar" data-k="refPar"><option value="">Elige</option>${['Familiar','Pareja','Amigo','Compañero de trabajo','Vecino'].map(o=>`<option ${k.refPar===o?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+  </section>
+  <section class="box"><h2><span class="stepn">${n++}</span>Fotos de tu cédula</h2>
+    <p class="muted small">Desde el teléfono puedes tomar la foto aquí mismo. Que se lean bien los datos y no tenga reflejos.</p>
+    ${photoBox('cedula','Foto de tu cédula','La parte de adelante, completa y nítida.','environment')}
+    ${photoBox('selfie','Selfie sosteniendo tu cédula','Tu cara y la cédula deben verse en la misma foto.','user')}
+  </section>`;
+}
+function kycErrors(){
+  const k = S.kyc;
+  if(!k.nac) return 'Indica tu fecha de nacimiento.';
+  if(edad(k.nac) < 18) return 'Debes ser mayor de edad para crear una cuenta.';
+  if(!k.estado || k.ciudad.trim().length<3 || k.dir.trim().length<8) return 'Completa tu dirección: estado, ciudad y dirección.';
+  if(k.lat==null && !k.locSkip) return 'Pulsa “Compartir mi ubicación actual”.';
+  if(!k.ocup || !k.ingreso) return 'Indica tu ocupación e ingreso aproximado.';
+  if(k.refNom.trim().split(/\s+/).length<2) return 'Escribe nombre y apellido de tu referencia.';
+  if(!telOk(k.refTel)) return 'El teléfono de la referencia debe tener 11 números, por ejemplo 04141234567.';
+  if(!k.cedula) return 'Agrega la foto de tu cédula.';
+  if(!k.selfie) return 'Agrega tu selfie sosteniendo la cédula.';
+  return '';
+}
+async function compressImg(file, max=1600){
+  if(!file || !/^image\//.test(file.type||'image/')) throw new Error('El archivo debe ser una imagen.');
+  try{
+    const bmp = await createImageBitmap(file);
+    const sc = Math.min(1, max/Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width*sc); c.height = Math.round(bmp.height*sc);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r=>c.toBlob(r, 'image/jpeg', .82));
+    if(blob) return blob;
+  }catch(e){}
+  if(file.size > 5*1024*1024) throw new Error('La foto es muy pesada. Intenta con otra.');
+  return file;
+}
+async function uploadDoc(blob, name){
+  const path = `${S.session.user.id}/${name}-${Date.now()}.jpg`;
+  const {error} = await sb.storage.from('documentos').upload(path, blob, {contentType:'image/jpeg', upsert:false});
+  if(error) throw new Error('No se pudo subir la foto: ' + error.message);
+  return path;
+}
+async function sendKyc(){
+  const k = S.kyc;
+  const [c1, c2] = [await uploadDoc(k.cedula, 'cedula'), await uploadDoc(k.selfie, 'selfie')];
+  await rpc('completar_verificacion', {p:{fecha_nacimiento:k.nac, estado:k.estado, ciudad:k.ciudad, direccion:k.dir, ocupacion:k.ocup, lugar_trabajo:k.trabajo,
+    ingreso_rango:k.ingreso, ref_nombre:k.refNom, ref_telefono:normTel(k.refTel), ref_parentesco:k.refPar, cedula_foto:c1, selfie_foto:c2,
+    lat:k.lat==null?'':String(k.lat), lng:k.lng==null?'':String(k.lng), precision:k.acc==null?'':String(Math.round(k.acc))}});
+  S.kyc = null;
+}
+
+/* ===================== registro ===================== */
+function vRegistro(){
+  if(me()) return vCuenta();
+  const k = kycInit();
+  return `<div class="crumbs"><button data-act="go" data-v="login">Ingresar</button>›<span>Crear cuenta</span></div>
+  <h1 style="margin-bottom:6px">Crear cuenta</h1>
+  <p class="muted" style="margin-bottom:18px;max-width:70ch">Como ofrecemos financiamiento, pedimos algunos datos y una foto de tu cédula para verificar tu identidad. Toma unos 3 minutos. Tus datos son privados.</p>
+  <div class="two">
+  <div class="costeps">
+    <section class="box"><h2><span class="stepn">1</span>Tus datos</h2>
+      <div class="fg">
+        <div class="field" style="grid-column:1/-1"><label for="r-name">Nombre y apellido</label><input id="r-name" data-k="nombre" value="${esc(k.nombre)}" autocomplete="name"></div>
+        <div class="field"><label for="r-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('r', k.tipo, k.ced)}</div>
+        <div class="field"><label for="r-nac">Fecha de nacimiento</label><input id="r-nac" type="date" data-k="nac" value="${esc(k.nac)}" max="${new Date().toISOString().slice(0,10)}"></div>
+        <div class="field"><label for="r-tel">Teléfono <span class="muted">(solo números)</span></label><input id="r-tel" data-k="tel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.tel)}" autocomplete="tel"></div>
+        <div class="field"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
+        <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
+      </div>
+    </section>
+    ${kycSections(2)}
+  </div>
+  <aside class="box sum"><h2>Antes de enviar</h2>
+    <ul class="checklist">
+      <li class="${k.nombre&&k.ced&&k.tel&&k.email&&k.pass?'ok':''}">Tus datos</li>
+      <li class="${k.estado&&k.dir&&(k.lat!=null||k.locSkip)?'ok':''}">Dirección y ubicación</li>
+      <li class="${k.ocup&&k.ingreso?'ok':''}">Trabajo e ingresos</li>
+      <li class="${k.refNom&&k.refTel?'ok':''}">Referencia personal</li>
+      <li class="${k.cedula&&k.selfie?'ok':''}">Fotos de la cédula</li>
+    </ul>
+    <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}>Declaro que mis datos son verdaderos y autorizo su verificación. Acepto los términos de venta y la política de privacidad.</label>
+    ${k.err?`<div class="note bad small">${esc(k.err)}</div>`:''}
+    <button class="btn buy block" data-act="doregister">${S.busy?'Creando cuenta…':'Crear cuenta'}</button>
+    <span class="muted small">¿Ya tienes cuenta? <button class="link small" data-act="go" data-v="login">Ingresa aquí</button></span>
+  </aside></div>`;
+}
+async function doRegister(){
+  const k = kycInit(); k.err = '';
+  const fail = m => { k.err = m; render(); };
+  const name = k.nombre.trim().replace(/\s+/g,' '), em = k.email.trim().toLowerCase(), ced = onlyDigits(k.ced), tel = normTel(k.tel);
+  if(name.split(' ').length<2) return fail('Escribe tu nombre y apellido.');
+  if(!/^\d{6,9}$/.test(ced)) return fail('Escribe tu cédula solo con números, por ejemplo 12345678.');
+  if(!/^0\d{10}$/.test(tel)) return fail('Escribe tu teléfono de 11 números, por ejemplo 04141234567.');
+  if(!/^\S+@\S+\.\S+$/.test(em)) return fail('Escribe un correo válido.');
+  if(k.pass.length<8 || !/\d/.test(k.pass)) return fail('La contraseña debe tener al menos 8 caracteres y un número.');
+  const ke = kycErrors(); if(ke) return fail(ke);
+  if(normTel(k.refTel)===tel) return fail('El teléfono de la referencia debe ser distinto al tuyo.');
+  if(!k.terms) return fail('Marca la casilla de autorización para continuar.');
+  const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, cedula:`${k.tipo}-${ced}`, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
+  if(error) return fail(/already registered|already been registered/i.test(error.message) ? 'Ya existe una cuenta con ese correo. Ingresa con tu contraseña.'
+    : /Database error/i.test(error.message) ? 'Esa cédula ya está registrada en otra cuenta.' : /Password/i.test(error.message) ? 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.' : friendly(error));
+  if(!data.session){ toast('Te enviamos un correo para confirmar tu cuenta. Ábrelo, ingresa y termina la verificación en Mi cuenta.'); go('login'); return; }
+  S.session = data.session;
+  try{ await sendKyc(); }
+  catch(e){ await loadPrivate(); S.acct='verificacion'; toast('Tu cuenta se creó, pero falta terminar la verificación: ' + friendly(e)); go('cuenta'); return; }
+  await loadPrivate(); toast(`Cuenta creada. Bienvenido, ${name.split(' ')[0]}. Revisaremos tus documentos pronto.`); afterLogin();
+}
+function verifPanel(){
+  const u = me(); const v = u.verif;
+  if(v==='verificado') return `<h1>Verificación</h1><div class="note ok">Tu identidad está verificada. Ya puedes comprar y solicitar financiamiento.</div>`;
+  if(v==='pendiente') return `<h1>Verificación</h1><div class="note warn">Recibimos tus documentos y los estamos revisando. Mientras tanto ya puedes hacer pedidos; los créditos se aprueban cuando terminemos la revisión.</div>`;
+  kycInit(u);
+  return `<h1>Verificación de identidad</h1>
+    ${v==='rechazado'?`<div class="note bad">No pudimos verificar tus documentos${u.verifNota?': '+esc(u.verifNota):''}. Vuelve a enviarlos.</div>`:`<div class="note info">Para comprar o solicitar financiamiento necesitamos verificar tu identidad. Toma unos 2 minutos.</div>`}
+    <section class="box"><h2><span class="stepn">1</span>Fecha de nacimiento</h2><div class="field" style="max-width:260px"><input id="k-nac" type="date" data-k="nac" value="${esc(S.kyc.nac)}" aria-label="Fecha de nacimiento"></div></section>
+    ${kycSections(2)}
+    ${S.kyc.err?`<div class="note bad small">${esc(S.kyc.err)}</div>`:''}
+    <div><button class="btn buy" data-act="dokyc">${S.busy?'Enviando…':'Enviar verificación'}</button></div>`;
+}
+
+/* ===================== trabaja con nosotros ===================== */
+function vTrabaja(){
+  const pc = S.cfg.postulacion;
+  if(!pc || pc.activo===false) return `<div class="empty"><h2>Trabaja con nosotros</h2><p>Por ahora no estamos recibiendo postulaciones.</p></div>`;
+  if(!S.post) S.post = {nombre:'', ptipo:'V', pced:'', ptel:'', pciudad:'', r:{}, err:'', done:null};
+  const P = S.post;
+  if(P.done){
+    const resumen = `Hola, me postulé para trabajar con ${BRAND.a}${BRAND.b}.\nPostulación: ${P.done}\nNombre: ${P.nombre}\nCédula: ${P.ptipo}-${onlyDigits(P.pced)}\nTeléfono: ${normTel(P.ptel)}\nCiudad: ${P.pciudad}\n` +
+      (pc.preguntas||[]).filter(q=>P.r[q.id]).map(q=>`${q.texto} ${P.r[q.id]}`).join('\n');
+    const wa = waLink(resumen);
+    return `<div class="empty" style="max-width:620px;margin:0 auto"><h2>¡Recibimos tu postulación!</h2>
+      <p>Tu número de postulación es <b>${esc(P.done)}</b>. ${wa?'Para agilizar el proceso, envíanosla también por WhatsApp:':'Te contactaremos pronto al teléfono que nos diste.'}</p>
+      ${wa?`<a class="btn buy" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Enviar por WhatsApp</a>`:''}
+      <button class="link" data-act="go" data-v="inicio">Volver a la tienda</button></div>`;
+  }
+  const field = q => {
+    const v = P.r[q.id] || '', req = q.requerida ? '' : ' <span class="muted">(opcional)</span>';
+    const lab = `<label>${esc(q.texto)}${req}</label>`;
+    if(q.tipo==='opcion') return `<div class="field" style="grid-column:1/-1">${lab}<div class="seg seg2">${(q.opciones||[]).map(o=>`<label class="so"><input type="radio" name="q-${q.id}" value="${esc(o)}" data-q="${q.id}" ${v===o?'checked':''}><span class="ot">${esc(o)}</span></label>`).join('')}</div></div>`;
+    if(q.tipo==='si_no') return `<div class="field" style="grid-column:1/-1">${lab}<div class="seg seg2" style="max-width:320px">${['Sí','No'].map(o=>`<label class="so"><input type="radio" name="q-${q.id}" value="${o}" data-q="${q.id}" ${v===o?'checked':''}><span class="ot">${o}</span></label>`).join('')}</div></div>`;
+    if(q.tipo==='parrafo') return `<div class="field" style="grid-column:1/-1">${lab}<textarea rows="3" data-q="${q.id}">${esc(v)}</textarea></div>`;
+    return `<div class="field">${lab}<input data-q="${q.id}" value="${esc(v)}" ${q.tipo==='numero'?'inputmode="numeric" data-digits="3"':''}></div>`;
+  };
+  return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>${esc(pc.titulo||'Trabaja con nosotros')}</span></div>
+  <div style="max-width:820px;margin:0 auto;display:grid;gap:16px">
+    <div><h1>${esc(pc.titulo||'Trabaja con nosotros')}</h1><p class="muted" style="margin-top:6px">${esc(pc.texto||'')}</p></div>
+    <section class="box"><h2><span class="stepn">1</span>Tus datos</h2><div class="fg">
+      <div class="field" style="grid-column:1/-1"><label for="p-nombre">Nombre y apellido</label><input id="p-nombre" data-k="nombre" value="${esc(P.nombre)}" autocomplete="name"></div>
+      <div class="field"><label for="p-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('p', P.ptipo, P.pced)}</div>
+      <div class="field"><label for="p-tel">Teléfono / WhatsApp <span class="muted">(solo números)</span></label><input id="p-tel" data-k="ptel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(P.ptel)}" autocomplete="tel"></div>
+      <div class="field"><label for="p-ciudad">Ciudad</label><input id="p-ciudad" data-k="pciudad" value="${esc(P.pciudad)}"></div>
+    </div></section>
+    <section class="box"><h2><span class="stepn">2</span>Cuéntanos de ti</h2><div class="fg">${(pc.preguntas||[]).map(field).join('')}</div></section>
+    ${P.err?`<div class="note bad small">${esc(P.err)}</div>`:''}
+    <div><button class="btn buy" data-act="dopostular">${S.busy?'Enviando…':'Enviar postulación'}</button></div>
+  </div>`;
+}
+async function doPostular(){
+  const P = S.post, pc = S.cfg.postulacion; P.err = '';
+  const fail = m => { P.err = m; render(); };
+  if(P.nombre.trim().split(/\s+/).length<2) return fail('Escribe tu nombre y apellido.');
+  if(!/^\d{6,9}$/.test(onlyDigits(P.pced))) return fail('Escribe tu cédula solo con números.');
+  if(!telOk(P.ptel)) return fail('Escribe tu teléfono de 11 números, por ejemplo 04141234567.');
+  if(P.pciudad.trim().length<3) return fail('Escribe tu ciudad.');
+  const miss = (pc.preguntas||[]).find(q=>q.requerida && !String(P.r[q.id]||'').trim());
+  if(miss) return fail('Responde: ' + miss.texto);
+  try{
+    const res = await rpc('postular', {p:{nombre:P.nombre, cedula:`${P.ptipo}-${onlyDigits(P.pced)}`, telefono:normTel(P.ptel), ciudad:P.pciudad, respuestas:P.r}});
+    P.done = res.codigo; render(); window.scrollTo(0,0);
+  }catch(e){ fail(friendly(e)); }
+}
+
+/* ===================== panel: clientes y postulaciones ===================== */
+function aClientes(){
+  const f = S.admF.cli || 'pendiente';
+  const all = S.users.filter(u=>u.role==='cliente');
+  const list = all.filter(u=>f==='todos'||u.verif===f).sort((a,b)=>b.created-a.created);
+  const cnt = v => all.filter(u=>u.verif===v).length;
+  return `<h1>Clientes</h1>
+    <div class="chips">${[['pendiente','Por revisar'],['verificado','Verificados'],['rechazado','Rechazados'],['incompleto','Sin documentos'],['todos','Todos']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="cli" data-v="${k}" aria-pressed="${f===k}">${l} <span class="num">(${k==='todos'?all.length:cnt(k)})</span></button>`).join('')}</div>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Cliente</th><th>Cédula</th><th>Teléfono</th><th>Ubicación</th><th>Registro</th><th>Identidad</th><th></th></tr></thead><tbody>
+    ${list.map(u=>`<tr><td><b>${esc(u.name)}</b><div class="muted small">${esc(u.email)}</div></td><td class="nw">${esc(u.cedula)}</td><td class="nw">${esc(u.phone)}</td>
+      <td>${esc(u.city)}${u.estadoVzla?', '+esc(u.estadoVzla):''}</td><td class="nw">${fd(u.created)}</td><td>${verifTag(u.verif)}</td>
+      <td class="nw"><button class="btn sm ${u.verif==='pendiente'?'brand':''}" data-act="cliente" data-u="${u.id}">${u.verif==='pendiente'?'Revisar':'Ver'}</button></td></tr>`).join('')}
+    </tbody></table></div>`:'<div class="empty">No hay clientes en este filtro.</div>'}`;
+}
+function clienteModal(uid){
+  const u = U(uid); if(!u) return; M = {type:'cliente', uid};
+  const e = edad(u.nac), map = u.lat!=null ? `https://www.google.com/maps?q=${u.lat},${u.lng}` : '';
+  const ingreso = (INGRESOS.find(x=>x[0]===u.ingreso)||[])[1] || '—';
+  modal(`Cliente · ${esc(u.name)}`, `
+    <div class="row between">${verifTag(u.verif)}<span class="muted small">Registrado el ${fd(u.created)}</span></div>
+    ${u.verifNota?`<div class="note small">${esc(u.verifNota)}</div>`:''}
+    <div class="docs"><figure><div id="doc-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure>
+      <figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Selfie con cédula</figcaption></figure></div>
+    <dl class="dl">
+      <dt>Cédula</dt><dd>${esc(u.cedula)}</dd><dt>Nacimiento</dt><dd>${u.nac?`${fd(dateOnly(u.nac))} (${e} años)`:'—'}</dd>
+      <dt>Teléfono</dt><dd>${esc(u.phone)} ${u.phone?`<a class="link small" href="https://wa.me/${waNum(u.phone)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd><dt>Correo</dt><dd>${esc(u.email)}</dd>
+      <dt>Dirección</dt><dd>${esc(u.addr)}${u.city?', '+esc(u.city):''}${u.estadoVzla?', '+esc(u.estadoVzla):''}</dd>
+      <dt>Ubicación</dt><dd>${map?`<a class="link" href="${map}" target="_blank" rel="noopener">Ver en el mapa</a> <span class="muted small">(±${u.acc||'?'} m)</span>`:'No compartida'}</dd>
+      <dt>Ocupación</dt><dd>${esc(u.ocup||'—')}${u.trabajo?' · '+esc(u.trabajo):''}</dd><dt>Ingreso</dt><dd>${esc(ingreso)}</dd>
+      <dt>Referencia</dt><dd>${esc(u.refNom||'—')}${u.refPar?' ('+esc(u.refPar)+')':''} ${u.refTel?`· ${esc(u.refTel)} <a class="link small" href="https://wa.me/${waNum(u.refTel)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd>
+    </dl>
+    ${u.verif!=='incompleto'?`<div class="field"><label for="cv-nota">Motivo si rechazas</label><select id="cv-nota"><option>La foto de la cédula no es legible</option><option>La selfie no coincide con la cédula</option><option>Los datos no coinciden con la cédula</option><option>No pudimos confirmar la referencia</option></select></div>`:''}`,
+    `<button class="btn" data-act="edo" data-u="${u.id}">Estado de cuenta</button>${u.verif!=='incompleto'?`<button class="btn danger" data-act="clirev" data-u="${u.id}" data-v="rechazado">Rechazar</button><button class="btn buy" data-act="clirev" data-u="${u.id}" data-v="verificado">Verificar identidad</button>`:''}`, true);
+  [['cedula',u.cedulaFoto],['selfie',u.selfieFoto]].forEach(([k,p])=>{ if(!p) return;
+    sb.storage.from('documentos').createSignedUrl(p, 600).then(({data,error})=>{ const el=$('#doc-'+k); if(!el||M.uid!==uid) return;
+      el.innerHTML = error||!data?.signedUrl ? 'No se pudo cargar.' : `<a href="${esc(data.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(data.signedUrl)}" alt="${k}"></a>`; }); });
+}
+const POSTEST = {nueva:['Nueva','warn'], contactada:['Contactada','info'], entrevista:['Entrevista','info'], contratada:['Contratada','ok'], descartada:['Descartada','']};
+function aPostulaciones(){
+  const f = S.admF.pos || 'activas';
+  const list = S.posts.filter(p=>f==='todas' || (f==='activas' ? !['contratada','descartada'].includes(p.estado) : p.estado===f));
+  return `<h1>Postulaciones</h1>
+    <p class="muted small">Personas que quieren trabajar promocionando y vendiendo equipos. Llegan desde “Trabaja con nosotros”.</p>
+    <div class="chips">${[['activas','En proceso'],['nueva','Nuevas'],['contratada','Contratadas'],['descartada','Descartadas'],['todas','Todas']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="pos" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Postulación</th><th>Nombre</th><th>Teléfono</th><th>Ciudad</th><th>Interés</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${list.map(p=>{const [l,c]=POSTEST[p.estado]||['',''];const interes=Object.entries(p.respuestas).find(([k])=>/hacer|cargo/i.test(k));return `<tr><td class="nw">${p.codigo}</td><td><b>${esc(p.nombre)}</b><div class="muted small">${esc(p.cedula)}</div></td><td class="nw">${esc(p.telefono)}</td><td>${esc(p.ciudad)}</td><td class="small">${esc(interes?interes[1]:'—')}</td><td class="nw">${fd(p.creado)}</td><td><span class="tag ${c}">${l}</span></td>
+      <td class="nw"><a class="btn sm" href="https://wa.me/${waNum(p.telefono)}?text=${encodeURIComponent(`Hola ${p.nombre.split(' ')[0]}, te escribimos de ${BRAND.a}${BRAND.b} por tu postulación ${p.codigo}.`)}" target="_blank" rel="noopener">WhatsApp</a> <button class="btn sm brand" data-act="post" data-p="${p.id}">Ver</button></td></tr>`}).join('')}
+    </tbody></table></div>`:'<div class="empty">No hay postulaciones en este filtro.</div>'}`;
+}
+function postModal(id){
+  const p = S.posts.find(x=>x.id===id); M = {type:'post', id};
+  modal(`Postulación ${p.codigo}`, `
+    <dl class="dl"><dt>Nombre</dt><dd>${esc(p.nombre)}</dd><dt>Cédula</dt><dd>${esc(p.cedula)}</dd><dt>Teléfono</dt><dd>${esc(p.telefono)}</dd><dt>Ciudad</dt><dd>${esc(p.ciudad)}</dd><dt>Recibida</dt><dd>${fdt(p.creado)}</dd>
+    ${Object.entries(p.respuestas).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <div class="fg"><div class="field"><label for="ps-est">Estado</label><select id="ps-est">${Object.entries(POSTEST).map(([k,[l]])=>`<option value="${k}" ${p.estado===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><label for="ps-nota">Nota interna</label><input id="ps-nota" value="${esc(p.nota||'')}" placeholder="Ej. entrevista el lunes 10 a.m."></div></div>`,
+    `<a class="btn" href="https://wa.me/${waNum(p.telefono)}" target="_blank" rel="noopener">${ico('chat')} Escribir por WhatsApp</a><button class="btn brand" data-act="savepost">Guardar</button>`, true);
 }
 
 /* ===================== modales ===================== */
@@ -824,6 +1113,7 @@ function reviewModal(id){
   let extra = '';
   if(p.kind==='inicial'){ const c=C(p.creditId), h=historial(p.userId);
     extra = `<dt>Crédito</dt><dd>${c.code} · ${c.n} cuotas de ${usd(r2(c.financed/c.n))}</dd><dt>Financiado</dt><dd>${usd(c.financed)} (inicial ${Math.round(c.iniPct*100)}%)</dd>
+      <dt>Identidad</dt><dd>${verifTag(u.verif)} <button class="link small" data-act="cliente" data-u="${u.id}">Ver documentos</button></dd>
       <dt>Cupo</dt><dd id="rc-cupo">Consultando…</dd><dt>Historial</dt><dd>${h.n} pedidos · ${h.liq} crédito(s) pagado(s) · ${h.moras} cuota(s) con mora</dd>`;
     sb.rpc('cupo_cliente', {p_usuario:p.userId}).then(({data})=>{ const el=$('#rc-cupo'); if(el && data) el.textContent = `${usd(data.limite)} · usado ${usd(data.usado)} (incluye esta solicitud)`; }); }
   if(p.kind==='cuota'){ const c=C(p.creditId); extra = `<dt>Cuotas</dt><dd>${p.cuotas.map(n=>{const q=c.cuotas.find(x=>x.n===n);return `${n} (${usd(q.amount)}${q.mora?` + ${usd(q.mora)} mora`:''})`}).join(', ')}</dd>`; }
@@ -890,7 +1180,7 @@ function render(){
   const v = S.route.v;
   if(v==='login' && me()){ location.hash = isAdmin() ? 'admin' : 'cuenta'; return; }
   const view = {inicio:vInicio, catalogo:vCatalogo, producto:vProducto, carrito:vCarrito, checkout:vCheckout, login:()=>vLogin(S.after?'Inicia sesión para continuar.':''),
-    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, 'nueva-clave':vNuevaClave}[v] || vInicio;
+    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, 'nueva-clave':vNuevaClave, registro:vRegistro, trabaja:vTrabaja}[v] || vInicio;
   $('#app').innerHTML = view();
   renderChrome();
   document.querySelectorAll('label.so, label.ch').forEach(l=>l.classList.toggle('on', !!l.querySelector('input:checked')));
@@ -985,10 +1275,28 @@ async function submitPay(){
 }
 
 const ACT = {
+  ffin: d => { S.f.fin = d.v; render(); },
+  doregister: () => run(doRegister),
+  dokyc: () => run(async()=>{ const k = S.kyc; k.err = kycErrors(); if(k.err) return render();
+    try{ await sendKyc(); await refresh(); toast('Recibimos tus documentos. Te avisaremos cuando estén verificados.'); }
+    catch(e){ k.err = friendly(e); render(); } }),
+  geoloc: () => { const k = kycInit(me());
+    if(!navigator.geolocation){ k.locSkip = true; k.locMsg = 'Tu navegador no permite compartir la ubicación. Revisaremos tu dirección manualmente.'; return render(); }
+    k.locMsg = 'Buscando tu ubicación…'; render();
+    navigator.geolocation.getCurrentPosition(pos=>{ k.lat = +pos.coords.latitude.toFixed(6); k.lng = +pos.coords.longitude.toFixed(6); k.acc = pos.coords.accuracy; k.locMsg=''; k.locSkip=false; render(); },
+      err=>{ if(err.code===1){ k.locSkip=false; k.locMsg='Diste “no permitir”. Activa el permiso de ubicación para este sitio en tu navegador y vuelve a pulsar el botón.'; }
+             else { k.locSkip=true; k.locMsg='No pudimos obtener tu ubicación. Puedes continuar; revisaremos tu dirección manualmente.'; } render(); },
+      {enableHighAccuracy:true, timeout:15000, maximumAge:60000}); },
+  dopostular: () => run(doPostular),
+  cliente: d => clienteModal(d.u),
+  clirev: d => run(async()=>{ await rpc('revisar_cliente', {p_usuario:d.u, p_estado:d.v, p_nota: d.v==='rechazado' ? $('#cv-nota')?.value : null}); closeModal(); await refresh(); toast(d.v==='verificado'?'Identidad verificada.':'Verificación rechazada. El cliente fue notificado.'); }),
+  post: d => postModal(+d.p),
+  savepost: () => run(async()=>{ await rpc('actualizar_postulacion', {pid:M.id, p_estado:$('#ps-est').value, p_nota:$('#ps-nota').value}); closeModal(); await refresh(); toast('Postulación actualizada.'); }),
+  finswitch: d => run(async()=>{ await rpc('cambiar_financiable', {pid:+d.id, valor:d.v==='1'}); await refresh(); toast('Forma de pago actualizada.'); }),
   go: d => go(d.v),
   reload: () => run(async()=>{ await refresh(); toast('Datos actualizados.'); }),
-  cat: d => { S.f = {cat:d.v||null, brands:[], max:'', fin:false, stock:false, sort:'rel', q:''}; go('catalogo'); },
-  clearf: () => { S.f = {cat:S.f.cat, brands:[], max:'', fin:false, stock:false, sort:'rel', q:''}; render(); },
+  cat: d => { S.f = {cat:d.v||null, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''}; go('catalogo'); },
+  clearf: () => { S.f = {cat:S.f.cat, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''}; render(); },
   pd: d => go('producto', +d.id),
   pcolor: d => { S.pd.color = +d.i; render(); },
   pstor: d => { S.pd.storage = +d.i; render(); },
@@ -1047,16 +1355,25 @@ document.addEventListener('click', e=>{
 $('#ov').addEventListener('click', e=>{ if(e.target.id==='ov') closeModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#ov').hidden) closeModal(); });
 document.addEventListener('input', e=>{
-  const k = e.target.dataset.in; if(k && S.co){ S.co[k] = e.target.value; }
+  const t = e.target;
+  if(t.dataset.digits){ const v = onlyDigits(t.value).slice(0, +t.dataset.digits); if(v!==t.value) t.value = v; }
+  if(t.dataset.k){ const o = S.route.v==='trabaja' ? S.post : kycInit(me()); if(o){ o[t.dataset.k] = t.type==='checkbox' ? t.checked : t.value; } }
+  if(t.dataset.q && S.post && t.type!=='radio'){ S.post.r[t.dataset.q] = t.value; }
+  const k = t.dataset.in; if(k && S.co){ S.co[k] = t.value; }
   if(e.target.id==='co-ini' && S.co){ const v=+e.target.value; const base = coCalc().base; $('#ini-l').textContent = `${v}% · ${usd(r2(base*v/100))}`; }
 });
-document.addEventListener('change', e=>{
-  const t = e.target, on = t.dataset.on; if(!on) return;
+document.addEventListener('change', async e=>{
+  const t = e.target;
+  if(t.dataset.k){ const o = S.route.v==='trabaja' ? S.post : kycInit(me()); if(o){ o[t.dataset.k] = t.type==='checkbox' ? t.checked : t.value; if(t.tagName==='SELECT' || t.type==='checkbox' || t.type==='date') render(); } return; }
+  if(t.dataset.q && S.post){ S.post.r[t.dataset.q] = t.value; if(t.type==='radio') render(); return; }
+  if(t.dataset.photo){ const f = t.files[0]; if(!f) return; const k = kycInit(me()), key = t.dataset.photo;
+    try{ const blob = await compressImg(f); if(k[key+'Url']) URL.revokeObjectURL(k[key+'Url']); k[key] = blob; k[key+'Url'] = URL.createObjectURL(blob); k.err=''; }
+    catch(err){ k.err = friendly(err); } render(); return; }
+  const on = t.dataset.on; if(!on) return;
   const f = S.f;
   if(on==='fcat'){ f.cat = t.value||null; f.brands=[]; }
   if(on==='fbrand'){ f.brands = t.checked ? [...f.brands, t.value] : f.brands.filter(b=>b!==t.value); }
   if(on==='fmax') f.max = t.value;
-  if(on==='ffin') f.fin = t.checked;
   if(on==='fstock') f.stock = t.checked;
   if(on==='fsort') f.sort = t.value;
   if(on==='ship') S.co.ship = t.value;
@@ -1075,7 +1392,7 @@ document.addEventListener('change', e=>{
 });
 document.addEventListener('submit', e=>{
   e.preventDefault(); const id = e.target.id;
-  if(id==='searchf'){ const qv=$('#q').value; S.f = {cat:null, brands:[], max:'', fin:false, stock:false, sort:'rel', q:qv}; go('catalogo'); render(); }
+  if(id==='searchf'){ const qv=$('#q').value; S.f = {cat:null, brands:[], max:'', fin:'', stock:false, sort:'rel', q:qv}; go('catalogo'); render(); }
   if(id==='couponf'){ S.coupon = $('#cp').value.trim().toUpperCase(); S.co=null; render(); }
   if(id==='loginf') run(async()=>{
     const em=$('#l-email').value.trim().toLowerCase(), pw=$('#l-pass').value, er=$('#l-err');
@@ -1085,21 +1402,6 @@ document.addEventListener('submit', e=>{
     S.session = data.session; await loadPrivate();
     toast(`Bienvenido, ${me()?.name.split(' ')[0] || ''}.`); afterLogin();
   });
-  if(id==='regf') run(async()=>{
-    const name=$('#r-name').value.trim().replace(/\s+/g,' '), ced=$('#r-ced').value.trim().toUpperCase().replace(/\s/g,''), em=$('#r-email').value.trim().toLowerCase(), tel=$('#r-tel').value.trim(), pw=$('#r-pass').value, er=$('#r-err');
-    if(name.split(' ').length<2) return er.textContent='Escribe tu nombre y apellido.';
-    if(!/^[VEJ]-?\d{1,2}\.?\d{3}\.?\d{3}$/.test(ced)) return er.textContent='La cédula debe tener el formato V-12.345.678.';
-    if(!/^\S+@\S+\.\S+$/.test(em)) return er.textContent='Escribe un correo válido.';
-    if(!/^0\d{3}-?\d{3}-?\d{4}$/.test(tel)) return er.textContent='El teléfono debe tener el formato 0414-000-0000.';
-    if(pw.length<8 || !/\d/.test(pw)) return er.textContent='La contraseña debe tener al menos 8 caracteres y un número.';
-    if(!$('#r-terms').checked) return er.textContent='Debes aceptar los términos.';
-    const cedNorm = ced[0] + '-' + ced.replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-    const {data, error} = await sb.auth.signUp({email:em, password:pw, options:{data:{nombre:name, cedula:cedNorm, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
-    if(error){ er.textContent = /already registered|already been registered/i.test(error.message) ? 'Ya existe una cuenta con ese correo. Ingresa con tu contraseña.'
-      : /Database error/i.test(error.message) ? 'Esa cédula ya está registrada en otra cuenta.' : /Password/i.test(error.message) ? 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.' : friendly(error); return; }
-    if(!data.session){ er.textContent=''; e.target.reset(); toast('Te enviamos un correo para confirmar tu cuenta. Ábrelo y luego ingresa.'); return; }
-    S.session = data.session; await loadPrivate(); toast(`Cuenta creada. Bienvenido, ${name.split(' ')[0]}.`); afterLogin();
-  });
   if(id==='newpassf') run(async()=>{
     const pw=$('#np-pass').value, er=$('#np-err');
     if(pw.length<8 || !/\d/.test(pw)) return er.textContent='La contraseña debe tener al menos 8 caracteres y un número.';
@@ -1107,7 +1409,7 @@ document.addEventListener('submit', e=>{
     if(error){ er.textContent = friendly(error); return; }
     toast('Contraseña actualizada.'); await refresh(); afterLogin();
   });
-  if(id==='dataf') run(async()=>{ await rpc('actualizar_mis_datos', {p_telefono:$('#d-tel').value, p_direccion:$('#d-addr').value, p_ciudad:$('#d-city').value}); await refresh(); toast('Datos actualizados.'); });
+  if(id==='dataf') run(async()=>{ if(!telOk($('#d-tel').value)) return toast('El teléfono debe tener 11 números, por ejemplo 04141234567.'); await rpc('actualizar_mis_datos', {p_telefono:$('#d-tel').value, p_direccion:$('#d-addr').value, p_ciudad:$('#d-city').value}); await refresh(); toast('Datos actualizados.'); });
   if(id==='cfgf') run(async()=>{
     const n = x => parseAmt($('#'+x).value);
     const planes = {}; document.querySelectorAll('[data-plan]').forEach(i=>planes[i.dataset.plan] = r2(parseAmt(i.value)/100));
