@@ -306,7 +306,8 @@ function renderChrome(){
     <div class="hact">
       ${isAdmin() ? `<button class="hbtn" data-act="go" data-v="admin">${ico('grid')}<span class="lb">Panel<small>Administración</small></span></button>` : ''}
       ${u && !isAdmin() ? `<button class="hbtn" data-act="acct" data-v="notificaciones" aria-label="Notificaciones">${ico('bell')}${un?`<span class="cnt">${un}</span>`:''}</button>` : ''}
-      <button class="hbtn" data-act="${u?(isAdmin()?'go':'acct'):'go'}" data-v="${u?(isAdmin()?'admin':'resumen'):'login'}">${ico('user')}<span class="lb">${u?`Hola, ${esc(u.name.split(' ')[0])}<small>${isAdmin()?'Administrador':'Mi cuenta'}</small>`:'Ingresar<small>o crear cuenta</small>'}</span></button>
+      <button class="hbtn" data-act="${u?(isAdmin()?'go':'acct'):'go'}" data-v="${u?(isAdmin()?'admin':'resumen'):'login'}">${ico('user')}<span class="lb">${u?`Hola, ${esc(u.name.split(' ')[0])}<small>${isAdmin()?'Administrador':'Mi cuenta'}</small>`:'Ingresar'}</span></button>
+      ${u?'':`<button class="btn buy sm hreg" data-act="go" data-v="registro">Crear cuenta</button>`}
       <button class="hbtn" data-act="go" data-v="carrito">${ico('cart')}${cnt?`<span class="cnt">${cnt}</span>`:''}<span class="lb">Carrito<small class="num">${usd(sum(S.cart,i=>i.unit*i.qty))}</small></span></button>
     </div>`;
   const v = S.route.v;
@@ -324,27 +325,87 @@ function renderChrome(){
 }
 
 /* ===================== vistas: tienda ===================== */
+function storyData(){
+  const phones = S.products.filter(p=>p.cat==='Teléfonos' && p.active!==false);
+  const avail = phones.filter(p=>p.stock>0);
+  const feat = [...avail].filter(p=>p.fin).sort((a,b)=>b.price-a.price)[0] || [...avail].sort((a,b)=>b.price-a.price)[0] || phones[0];
+  if(!feat) return null;
+  const others = phones.filter(p=>p!==feat).sort((a,b)=>(b.stock>0)-(a.stock>0)).slice(0,4);
+  return {feat, others};
+}
+const screenSize = s => (String(s||'').match(/^[\d.,]+\s?("|pulgadas)/)||[firstPart(s)])[0];
+const firstPart = s => String(s||'').split(/,\s|\s\+|·|\(/)[0].trim();
+function storyHTML(){
+  const d = storyData(); if(!d) return '';
+  const p = d.feat, sp = p.specs||{}, n = midPlan(), canFin = p.fin && p.price>=S.cfg.minFin;
+  const cuota = canFin ? finCuota(p.price, n) : 0, ini = r2(p.price*S.cfg.inicialMin);
+  const wall = p.wall && p.wall.length===2 && p.wall[0]!=='#000' ? `linear-gradient(160deg,${esc(p.wall[0])},${esc(p.wall[1])})` : '';
+  const body = p.colors[0]?.hex || '#2B2D34';
+  const slots = [-2,-1,1,2];
+  const minis = d.others.map((o,i)=>{ const w = o.wall && o.wall.length===2 ? o.wall : ['#888','#222'];
+    return `<div class="mini" data-i="${slots[i]}" style="--wp:linear-gradient(160deg,${esc(w[0])},${esc(w[1])})"><div class="body"><div class="screen"><div class="isl"></div><div class="time">10:30</div><div class="glare"></div></div></div><div class="tag"><b>${esc(o.name)}</b><span class="num">${usd(o.price).replace('.00','')}</span></div></div>`; }).join('');
+  const cam = sp['Cámara principal'], bat = sp['Batería'], pan = sp['Pantalla'], cpu = sp['Procesador'], ram = sp['Memoria RAM'];
+  const colores = p.colors.map(c=>c.n).join(', ').replace(/, ([^,]+)$/,' o $1');
+  const says = [];
+  says.push(`<div class="say left" data-r="0.12,0.25"><span class="k">Equipo destacado · ${esc(p.name)}</span><h2>${esc(p.brand)}<br><em>${esc(p.name.replace(p.brand,'').trim()||p.name)}</em></h2><p>${esc(p.desc || ('Disponible en ' + colores + '.'))}</p></div>`);
+  if(cam) says.push(`<div class="say right" data-r="0.28,0.42"><span class="k">Cámara</span><h2><em>${esc(firstPart(cam))}</em><br>de detalle.</h2><p>${esc(cam)}${sp['Cámara frontal']?` · Frontal de ${esc(sp['Cámara frontal'])}`:''}.</p></div>`);
+  if(bat) says.push(`<div class="say left" data-r="0.50,0.60"><span class="k">Batería</span><h2><em>${esc(firstPart(bat))}</em></h2><p>${esc(bat)}.</p></div>`);
+  if(pan) says.push(`<div class="say right" data-r="0.60,0.70"><span class="k">Pantalla</span><h2><em>${esc(screenSize(pan))}</em><br>de pantalla.</h2><p>${esc(pan)}${cpu?` · ${esc(cpu)}`:''}.</p></div>`);
+  says.push(`<div class="say final" data-r="0.80,1.01"><span class="k">${canFin?'Contado o cuotas':'Pago de contado'}</span>
+    <h2>${usd(p.price).replace('.00','')}${canFin?` o <em>${n} cuotas<br>de ${usd(cuota)}</em>`:''}</h2>
+    <p>${canFin?`Paga una inicial de ${usd(ini)}, sube tu comprobante y retíralo o recíbelo en casa.`:'Sube tu comprobante y retíralo o recíbelo en casa.'}</p>
+    <div class="row"><button class="btn buy" data-act="pd" data-id="${p.id}">Lo quiero</button><button class="btn ghost" data-act="cat" data-v="Teléfonos">Ver otros modelos</button></div></div>`);
+  const u = me();
+  return `<section class="story" id="story" aria-label="Vitrina y equipo destacado">
+  <div class="stage" id="stage">
+    <div class="hero-copy" id="hero">
+      <h1>${'Tu próximo teléfono,'.split(' ').map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.07}s">${w}</span>`).join(' ')} <em>${'de contado o en cuotas.'.split(' ').map((w,i)=>`<span class="w" style="animation-delay:${.32+i*.07}s">${w}</span>`).join(' ')}</em></h1>
+      <p>Teléfonos, tablets y accesorios de todas las gamas. Paga una inicial desde el ${Math.round(S.cfg.inicialMin*100)}% y el resto en cuotas mensuales.</p>
+      <div class="row"><button class="btn buy" data-act="cat" data-v="">Ver catálogo</button>${u?`<button class="btn ghost" data-act="go" data-v="financiamiento">Simular mis cuotas</button>`:`<button class="btn ghost" data-act="go" data-v="registro">Crear cuenta</button>`}</div>
+      <div class="brands">${[...new Set(S.products.map(x=>x.brand))].slice(0,6).map(b=>`<span>${esc(b.toUpperCase())}</span>`).join('')}</div>
+    </div>
+    <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
+      <div class="floor" id="floor"></div>
+      ${minis}
+      <div class="rig" id="rig">
+        <div class="phone" id="phone">
+          <div class="f side r"></div><div class="f side l"></div>
+          <div class="f back" style="--body:${esc(body)}"><div class="cam"><div class="lens a"></div><div class="lens b"></div><div class="lens c"></div><div class="flash"></div></div><div class="brandmark">${esc(p.brand.toUpperCase())}</div></div>
+          <div class="f front"><div class="screen" id="screen"${wall?` style="--wp:${wall}"`:''}><div class="isl"></div><div class="time">10:30</div><div class="date">${new Date().toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'})}</div>
+            ${canFin?`<div class="offer"><small>Llévalo hoy</small><b class="num">${n} × ${usd(cuota)}</b><span>Inicial de ${usd(ini)}</span></div>`:`<div class="offer"><small>Llévalo hoy</small><b class="num">${usd(p.price)}</b><span>Pago de contado</span></div>`}<div class="glare"></div></div></div>
+        </div>
+        <div class="layers" id="layers">
+          <div class="lay l-back"><span class="lbl">Tapa trasera</span></div>
+          <div class="lay l-bat" data-t="${esc(firstPart(bat)||'Batería')}"><span class="lbl">${esc(bat?'Batería '+firstPart(bat):'Batería')}</span></div>
+          <div class="lay l-board"><span class="lbl">${esc([firstPart(cpu), ram].filter(Boolean).join(' · ')||'Procesador')}</span></div>
+          <div class="lay l-frame"><span class="lbl">Marco</span></div>
+          <div class="lay l-screen" data-t="${esc(pan?screenSize(pan):'Pantalla')}"><span class="lbl">${esc(pan?'Pantalla '+screenSize(pan):'Pantalla')}</span></div>
+        </div>
+        <div class="tag" id="rigtag"><b>${esc(p.name)}</b><span class="num">${usd(p.price).replace('.00','')}</span></div>
+      </div>
+    </div></div>
+    ${says.join('')}
+    <div class="scroll-hint" id="hint"><i></i>Desliza para ver el equipo destacado</div>
+    <nav class="progress" id="prog" aria-label="Partes de la presentación"><button data-go="0" aria-label="Vitrina"></button><button data-go="0.18" aria-label="Diseño"></button><button data-go="0.35" aria-label="Cámara"></button><button data-go="0.56" aria-label="Por dentro"></button><button data-go="0.9" aria-label="Precio"></button></nav>
+  </div>
+  </section>`;
+}
+function jobCard(inTrabaja){
+  const pc = S.cfg.postulacion; if(!pc || pc.activo===false) return '';
+  return `<section class="job">
+    <div><h2>¿Quieres vender con nosotros?</h2><p>Buscamos personas para vender nuestros equipos por redes sociales y WhatsApp, a comisión. Completa el formulario y te escribimos.</p>
+      <div class="row" style="margin-top:22px"><button class="btn buy" ${inTrabaja?'data-act="topost"':'data-act="go" data-v="trabaja"'}>Postularme</button></div></div>
+    <ul><li>Trabajas desde tu teléfono, en tu horario</li><li>Ganas por cada venta que cierres</li><li>Te damos fotos, precios y planes de cuotas para compartir</li></ul>
+  </section>`;
+}
 function vInicio(){
   const top = S.products.filter(p=>p.cat==='Teléfonos' && p.stock>0).slice(0,4);
   const acc = S.products.filter(p=>['Accesorios','Audio','Smartwatch'].includes(p.cat)).slice(0,4);
-  const heroP = [...S.products].filter(p=>p.cat==='Teléfonos').sort((a,b)=>b.price-a.price)[0];
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
-  return `
-  <section class="hero">
-    <div class="tx">
-      <span class="eyebrow">Contado o financiado</span>
-      <h1>Estrena teléfono hoy y págalo en hasta ${plans[plans.length-1]||9} cuotas</h1>
-      <p>Paga una inicial desde el ${Math.round(S.cfg.inicialMin*100)}%, sube tu comprobante y recibe tu equipo. El resto lo pagas mes a mes desde tu cuenta.</p>
-      <div class="row"><button class="btn buy" data-act="cat" data-v="Teléfonos">Ver teléfonos</button><button class="btn" data-act="go" data-v="financiamiento">Simular mis cuotas</button></div>
-    </div>
-    <div class="img">${heroP?img(heroP):''}</div>
-  </section>
-  <div class="perks">
-    <div>${ico('card')}<p><b>Contado o cuotas</b><span>Planes de ${plans.join(', ').replace(/, (\d+)$/,' y $1')} meses</span></p></div>
-    <div>${ico('truck')}<p><b>Envíos nacionales</b><span>Gratis en compras desde ${usd(S.cfg.envioGratis).replace('.00','')}</span></p></div>
-    <div>${ico('store')}<p><b>Retiro en tienda</b><span>Listo 24 h después del pago</span></p></div>
-    <div>${ico('shield')}<p><b>Garantía</b><span>En todos nuestros equipos</span></p></div>
-  </div>
+  const tick = [`Inicial desde ${Math.round(S.cfg.inicialMin*100)}%`, `Planes de ${plans.join(', ').replace(/, (\d+)$/,' y $1')} meses`, 'Envíos a todo el país', 'Retiro en tienda', 'Pago móvil, transferencia y Zelle'];
+  return `${storyHTML()}
+  <div class="ticker" aria-hidden="true"><div class="track">${[...tick,...tick].map(t=>`<span>${esc(t)}</span>`).join('')}</div></div>
+  <div class="wrap home-body">
   <section class="sec"><div class="sech"><h2>Categorías</h2></div>
     <div class="catgrid">${CATS.map(c=>{const list=S.products.filter(x=>x.cat===c); const p=list[0]; return p?`<button class="cat" data-act="cat" data-v="${c}">${img(p)}<b>${c}</b><span class="muted small">${list.length} producto${list.length===1?'':'s'}</span></button>`:''}).join('')}</div>
   </section>
@@ -352,13 +413,77 @@ function vInicio(){
     <div class="pgrid">${top.map(pcard).join('')}</div></section>`:''}
   ${acc.length?`<section class="sec"><div class="sech"><h2>Complementa tu equipo</h2><button class="link" data-act="cat" data-v="Accesorios">Ver accesorios</button></div>
     <div class="pgrid">${acc.map(pcard).join('')}</div></section>`:''}
-  <section class="sec"><div class="sech"><h2>Cómo comprar a crédito</h2><button class="link" data-act="go" data-v="financiamiento">Condiciones completas</button></div>
+  <section class="sec"><div class="sech"><h2>Cómo comprar en cuotas</h2><button class="link" data-act="go" data-v="financiamiento">Condiciones completas</button></div>
     <div class="howto">
-      <div><span class="n">1</span><h3>Crea tu cuenta</h3><p class="muted">Regístrate con tu cédula. Tu cupo inicial es de ${usd(S.cfg.cupoBase)} y crece con cada crédito que terminas de pagar.</p></div>
-      <div><span class="n">2</span><h3>Paga la inicial</h3><p class="muted">Elige el plan y sube el comprobante de tu inicial. Revisamos tu solicitud en menos de 24 horas.</p></div>
-      <div><span class="n">3</span><h3>Recibe y paga tus cuotas</h3><p class="muted">Al aprobarse, despachamos tu equipo. Pagas cada cuota desde tu cuenta antes de su fecha de vencimiento.</p></div>
-    </div></section>`;
+      <div><span class="n">1</span><h3>Crea tu cuenta</h3><p class="muted">Nombre, cédula y teléfono, solo con números. Con eso ya compras de contado.</p></div>
+      <div><span class="n">2</span><h3>Elige tus cuotas</h3><p class="muted">Planes de ${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses. Envías una foto tuya y una de tu cédula, y pagas la inicial.</p></div>
+      <div><span class="n">3</span><h3>Recíbelo</h3><p class="muted">Aprobamos tu crédito y te lo enviamos o lo retiras. Pagas cada cuota desde tu cuenta.</p></div>
+    </div></section>
+  ${jobCard(false)}
+  </div>`;
 }
+
+/* ---------- animación de la portada (avanza con el scroll) ---------- */
+const STORY = {raf:0, cur:0, mx:0, my:0};
+function setHH(){ const h = $('header.main'); if(h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px'); }
+window.addEventListener('resize', setHH);
+function storyStop(){ cancelAnimationFrame(STORY.raf); STORY.raf = 0; document.body.classList.remove('is-home'); }
+function storyStart(){
+  storyStop();
+  const story = $('#story'); if(!story) return;
+  document.body.classList.add('is-home');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (v,a=0,b=1) => Math.min(b, Math.max(a, v));
+  const seg = (p,a,b) => clamp((p-a)/(b-a));
+  const ease = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+  const lerp = (a,b,t) => a+(b-a)*t;
+  const stage = $('#stage'), scene = $('#scene'), rig = $('#rig'), phone = $('#phone'), layers = $('#layers'), screen = $('#screen'), hero = $('#hero'), hint = $('#hint'), rigtag = $('#rigtag'), floor = $('#floor');
+  const minis = [...story.querySelectorAll('.mini')].map(el=>({el, i:+el.dataset.i}));
+  const says = [...story.querySelectorAll('.say')].map(el=>({el, r:el.dataset.r.split(',').map(Number)}));
+  const lays = [...layers.querySelectorAll('.lay')];
+  const dots = [...story.querySelectorAll('#prog button')];
+  STORY.cur = 0;
+  dots.forEach(b=>b.onclick = ()=>{ const hh = $('header.main').offsetHeight; scrollTo({top: story.offsetTop - hh + (story.offsetHeight - stage.offsetHeight) * +b.dataset.go, behavior:'smooth'}); });
+  function progress(){ const hh = $('header.main').offsetHeight, r = story.getBoundingClientRect(); return clamp((hh - r.top) / (r.height - stage.offsetHeight)); }
+  function draw(p){
+    const W = stage.clientWidth, H = stage.clientHeight, narrow = W < 900;
+    const s0 = clamp(Math.min(H/(narrow?1050:760), narrow ? W/560 : 1), .38, 1);
+    scene.style.setProperty('--s', s0);
+    const k = 1 - ease(seg(p,.02,.13)), g1 = ease(seg(p,.13,.26));
+    const z = ease(seg(p,.27,.36)) - ease(seg(p,.40,.47)), g2 = ease(seg(p,.40,.47));
+    const ex = ease(seg(p,.47,.58)) - ease(seg(p,.70,.78)), showLayers = seg(p,.45,.49) - seg(p,.74,.78);
+    const fin = ease(seg(p,.78,.88));
+    let gx = 0, gy = 0;
+    if(narrow){ gy = (k*H*.2 - (1-k)*(1-fin)*H*.17 - fin*H*.16)/s0; } else { gx = (k*W*.2 + fin*W*.2)/s0; }
+    const look = reduce ? 0 : 1, gap = narrow ? 120 : 165;
+    minis.forEach(({el,i})=>{
+      const spread = 1 + (1-k)*2.2, x = gx + i*gap*spread, ry = -i*12 - (1-k)*i*20 + STORY.mx*10*look, sc = .74 - Math.abs(i)*.06;
+      el.style.transform = `translate3d(${x}px,${gy + Math.abs(i)*22 + (1-k)*60}px,${-Math.abs(i)*120}px) rotateY(${ry}deg) scale(${sc})`;
+      el.style.opacity = String(k*k); el.style.filter = k<1 ? `blur(${(1-k)*10}px)` : '';
+    });
+    floor.style.transform = `translate(${gx}px,${gy}px) scaleX(${1 + k*1.6})`; floor.style.opacity = String(.5 + .5*k);
+    rigtag.style.opacity = String(k);
+    const ry = lerp(-14 + STORY.mx*16*look*k, 180, g1) + 180*g2, rx = 6 - STORY.my*8*look*k - 6*g1 + 6*fin;
+    const float = reduce ? 0 : Math.sin(performance.now()/1400)*6*(1-z);
+    let sc = lerp(.82, 1, 1-k) + (narrow?1.1:1.75)*z - .06*ex; if(narrow) sc *= 1 - .3*fin;
+    rig.style.transform = `translate3d(${gx - 62*z}px,${gy + (narrow?110:175)*z + float}px,40px) rotateX(${rx - 4*ex}deg) rotateY(${ry}deg) scale(${sc})`;
+    phone.style.opacity = String(1 - showLayers); layers.style.opacity = String(showLayers);
+    layers.style.transform = `rotateY(${-360 + 30*ex}deg) rotateX(${52*ex}deg) rotateZ(${-24*ex}deg)`;
+    lays.forEach((l,i)=>{ l.style.transform = `translateZ(${(i-2)*86*ex}px)`; l.style.setProperty('--lbl', String(seg(ex,.6,1))); });
+    screen.style.setProperty('--offer', String(fin));
+    const h = seg(p,.02,.1);
+    hero.style.opacity = String(1-h); hero.style.filter = h ? `blur(${h*10}px)` : ''; hero.style.transform = `translateY(${-h*50}px)`; hero.style.visibility = h>.98 ? 'hidden' : '';
+    hint.style.opacity = String(1 - seg(p,0,.04));
+    for(const s of says){ const [a,b] = s.r, len = b-a, fi = seg(p,a,a+len*.25), fo = seg(p,b-len*.25,b), v = fi*(1-fo);
+      s.el.style.opacity = String(v); s.el.style.filter = v<1 ? `blur(${(1-v)*12}px)` : ''; s.el.style.transform = `translateY(${(1-fi)*36 - fo*36}px)`;
+      s.el.classList.toggle('on', v>.6); s.el.style.visibility = v<.02 ? 'hidden' : ''; }
+    const sec = p<.12?0:p<.27?1:p<.47?2:p<.78?3:4; dots.forEach((d,i)=>d.classList.toggle('on', i===sec));
+  }
+  const loop = () => { if(!document.body.contains(story)) return storyStop(); const t = progress(); STORY.cur += (t - STORY.cur) * (reduce ? 1 : .12); draw(STORY.cur); STORY.raf = requestAnimationFrame(loop); };
+  STORY.raf = requestAnimationFrame(loop);
+}
+window.addEventListener('pointermove', e=>{ STORY.mx = e.clientX/innerWidth - .5; STORY.my = e.clientY/innerHeight - .5; });
+
 function vCatalogo(){
   const f = S.f; const qs = f.q.trim().toLowerCase();
   let list = S.products.filter(p=>(!f.cat||p.cat===f.cat) && (!f.brands.length||f.brands.includes(p.brand)) && (!f.max||p.price<=+f.max) && (!f.fin||(f.fin==='si'?p.fin:!p.fin)) && (!f.stock||p.stock>0)
@@ -1011,8 +1136,9 @@ function vTrabaja(){
     return `<div class="field">${lab}<input data-q="${q.id}" value="${esc(v)}" ${q.tipo==='numero'?'inputmode="numeric" data-digits="3"':''}></div>`;
   };
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>${esc(pc.titulo||'Trabaja con nosotros')}</span></div>
-  <div style="max-width:820px;margin:0 auto;display:grid;gap:16px">
-    <div><h1>${esc(pc.titulo||'Trabaja con nosotros')}</h1><p class="muted" style="margin-top:6px">${esc(pc.texto||'')}</p></div>
+  ${jobCard(true)}
+  <div id="postform" style="max-width:820px;margin:28px auto 0;display:grid;gap:16px;scroll-margin-top:170px">
+    <div><h1>Formulario de postulación</h1><p class="muted" style="margin-top:6px">${esc(pc.texto||'')}</p></div>
     <section class="box"><h2><span class="stepn">1</span>Tus datos</h2><div class="fg">
       <div class="field" style="grid-column:1/-1"><label for="p-nombre">Nombre y apellido</label><input id="p-nombre" data-k="nombre" value="${esc(P.nombre)}" autocomplete="name"></div>
       <div class="field"><label for="p-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('p', P.ptipo, P.pced)}</div>
@@ -1201,9 +1327,13 @@ function render(){
   const v = S.route.v;
   if(v==='login' && me()){ location.hash = isAdmin() ? 'admin' : 'cuenta'; return; }
   const view = {inicio:vInicio, catalogo:vCatalogo, producto:vProducto, carrito:vCarrito, checkout:vCheckout, login:()=>vLogin(S.after?'Inicia sesión para continuar.':''),
-    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, 'nueva-clave':vNuevaClave, registro:vRegistro, trabaja:vTrabaja}[v] || vInicio;
+    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, 'nueva-clave':vNuevaClave, registro:vRegistro, trabaja:vTrabaja}[v];
+  if(!view){ $('#app').className = ''; $('#app').innerHTML = vInicio(); renderChrome(); if(!STORY.raf) storyStart(); return; }
+  $('#app').className = v==='inicio' || !view ? '' : 'wrap';
   $('#app').innerHTML = view();
   renderChrome();
+  setHH();
+  if($('#story')){ if(!STORY.raf) storyStart(); } else storyStop();
   document.querySelectorAll('label.so, label.ch').forEach(l=>l.classList.toggle('on', !!l.querySelector('input:checked')));
 }
 async function afterLogin(){
@@ -1316,6 +1446,7 @@ const ACT = {
   savepost: () => run(async()=>{ await rpc('actualizar_postulacion', {pid:M.id, p_estado:$('#ps-est').value, p_nota:$('#ps-nota').value}); closeModal(); await refresh(); toast('Postulación actualizada.'); }),
   finswitch: d => run(async()=>{ await rpc('cambiar_financiable', {pid:+d.id, valor:d.v==='1'}); await refresh(); toast('Forma de pago actualizada.'); }),
   go: d => go(d.v),
+  topost: () => $('#postform')?.scrollIntoView({behavior:'smooth'}),
   reload: () => run(async()=>{ await refresh(); toast('Datos actualizados.'); }),
   cat: d => { S.f = {cat:d.v||null, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''}; go('catalogo'); },
   clearf: () => { S.f = {cat:S.f.cat, brands:[], max:'', fin:'', stock:false, sort:'rel', q:''}; render(); },
