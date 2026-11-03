@@ -592,3 +592,5 @@ nav.cats button.stb{color:var(--gold-l)}
 .content td .row b{white-space:nowrap}
 .content td .row > div:last-child{min-width:140px}
 .dk a.btn{text-decoration:none}
+.sc-meta{align-items:center}
+.dk .tag.dark{background:#26262B;color:#D0CED6}

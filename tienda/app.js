@@ -130,6 +130,8 @@ const isAdmin = () => S.me?.role==='admin';
 const myStore = () => isAdmin() ? (S.me.store ?? null) : null;          // tienda del admin (null = admin general)
 const isGenAdmin = () => isAdmin() && S.me.store == null;
 const ST = id => S.stores.find(t=>t.id===id) || {id, name:'Tienda', short:'T', pay:{}, frases:[], whatsapp:'', slogan:''};
+const finStores = () => S.stores.filter(t=>t.cuotas);
+const cashStores = () => S.stores.filter(t=>!t.cuotas);
 const siteName = () => S.stores.map(t=>t.name).join(' y ') || 'la tienda';
 // lo que ve el admin: su tienda, o la elegida en el selector si es admin general
 const inAdm = x => { const t = myStore() ?? (S.admStore || null); return t==null || x.store===t; };
@@ -150,7 +152,7 @@ function mapCfg(c){
 function mapStore(t){
   const ini = String(t.nombre||'').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).map(w=>/^one$/i.test(w)?'1':w[0]).join('').slice(0,2).toUpperCase();
   return { id:t.id, slug:t.slug, name:t.nombre, short:ini||'T', logo:t.logo_url||'', color:t.color||'#D2AE3E', slogan:t.eslogan||'',
-    frases:Array.isArray(t.frases)?t.frases:[], whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{} };
+    frases:Array.isArray(t.frases)?t.frases:[], cuotas:t.acepta_cuotas!==false, whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{} };
 }
 function mapProduct(p){
   return { id:p.id, store:p.tienda_id||1, brand:p.marca, name:p.nombre, cat:p.categoria, shape:p.forma, price:+p.precio, stock:p.stock,
@@ -299,7 +301,7 @@ function pcard(p){
       <button class="nm" data-act="pd" data-id="${p.id}">${esc(p.name)}${p.storages?` ${esc(p.storages[0].n)}`:''}</button>
       <span class="sp">${esc(Object.values(p.specs).slice(0,2).join(' · '))}</span>
       <span class="pr num">${usd(p.price)}</span>
-      ${p.fin&&p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n))}</span>`:p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
+      ${!ST(p.store).cuotas?'<span class="sp">Pago de contado</span>':p.fin&&p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n))}</span>`:p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
       ${!out && p.stock<=5?`<span class="stk">${p.stock===1?'Última unidad':`Últimas ${p.stock} unidades`}</span>`:''}
       <button class="btn ${out?'':'buy'}" ${out?'disabled':''} data-act="${opts?'pd':'add'}" data-id="${p.id}">${out?'Sin existencia':opts?'Ver opciones':'Agregar al carrito'}</button>
     </div></article>`;
@@ -364,7 +366,7 @@ function storyHTML(){
     <div class="hero-copy" id="hero">
       <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
       <h1>${['Estrénalo','hoy.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Págalo','en','cuotas.'].map((w,i)=>`<span class="w g" style="animation-delay:${.3+i*.09}s">${w}</span>`).join(' ')}</em></h1>
-      <p>Paga una inicial desde el ${iniPct}% y el resto en ${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses. Sin bancos y con una sola cuenta para las dos tiendas.</p>
+      <p>${finStores().length?`En ${finStores().map(t=>esc(t.name)).join(' y ')} pagas una inicial desde el ${iniPct}% y el resto en ${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses.`:''}${cashStores().length?` En ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado y te lo llevas hoy.`:''} Una sola cuenta para las dos tiendas.</p>
       <div class="row"><button class="btn buy" data-act="cat" data-v="">Ver equipos →</button>${u?`<button class="btn ghost" data-act="go" data-v="financiamiento">Cómo funcionan las cuotas</button>`:`<button class="btn ghost" data-act="go" data-v="registro">Crear cuenta</button>`}</div>
     </div>
     <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
@@ -388,7 +390,7 @@ function storyHTML(){
     </div></div>
     ${says}
     <div class="say final" data-r="0.80,1.01"><span class="k">Contado o cuotas</span><h2>Dos tiendas,<br><em>una sola cuenta.</em></h2>
-      <p>Compra en ${S.stores.map(t=>esc(t.name)).join(' o ')} con la misma cuenta. Cada tienda te atiende y despacha su pedido.</p>
+      <p>${S.stores.map(t=>`${t.cuotas?'En cuotas o de contado':'De contado'} en ${esc(t.name)}`).join('; ')}. Con la misma cuenta, y cada tienda te atiende y despacha su pedido.</p>
       <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">Ver ${esc(t.name)}</button>`).join('')}</div></div>
     <div class="scroll-hint" id="hint"><i></i>Desliza para descubrirlo</div>
     <nav class="progress" id="prog" aria-label="Partes de la presentación"><button data-go="0" aria-label="Inicio"></button><button data-go="0.18" aria-label="Primera tienda"></button><button data-go="0.35" aria-label="Segunda tienda"></button><button data-go="0.56" aria-label="Por dentro"></button><button data-go="0.9" aria-label="Tiendas"></button></nav>
@@ -413,14 +415,14 @@ function vInicio(){
   <div class="ticker" aria-hidden="true"><div class="track">${[...tick,...tick].map(t=>`<span>${t}</span>`).join('')}</div></div>
   <div class="dk">
   <section class="blk" id="tiendas"><div class="wrap">
-    <div class="reveal"><span class="eyebrow">Nuestras tiendas</span><h2 class="big">Elige dónde<br>comprar.</h2><p class="lead">Con la misma cuenta pagas de contado o en cuotas en cualquiera de las dos.</p></div>
+    <div class="reveal"><span class="eyebrow">Nuestras tiendas</span><h2 class="big">Elige dónde<br>comprar.</h2><p class="lead">${finStores().map(t=>esc(t.name)).join(' y ')} ${finStores().length>1?'venden':'vende'} en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')} ${cashStores().length>1?'venden':'vende'} de contado. Con la misma cuenta compras en las dos.</p></div>
     <div class="stores">${S.stores.map(t=>{ const np = S.products.filter(p=>p.store===t.id).length; const wa = waLink('Hola, quiero información sobre un equipo.', t.id);
       return `<article class="storecard reveal"><div class="sc-top">${storeMark(t,56)}<div><h3>${esc(t.name)}</h3><p>${esc(t.slogan)}</p></div></div>
-        <div class="sc-meta"><span><b class="num">${np}</b> equipo${np===1?'':'s'}</span>${t.horario?`<span>${esc(t.horario)}</span>`:''}</div>
+        <div class="sc-meta"><span class="tag ${t.cuotas?'ok':'dark'}">${t.cuotas?'Contado o cuotas':'Solo contado'}</span><span><b class="num">${np}</b> equipo${np===1?'':'s'}</span>${t.horario?`<span>${esc(t.horario)}</span>`:''}</div>
         <div class="row"><button class="btn buy" data-act="tienda" data-v="${t.id}">Ver catálogo →</button>${wa?`<a class="btn ghost" href="${wa}" target="_blank" rel="noopener">${ico('chat')} WhatsApp</a>`:''}</div></article>`; }).join('')}</div>
   </div></section>
   <section class="blk" id="cuotas"><div class="wrap">
-    <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Sin bancos ni papeleo. Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
+    <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas${finStores().length===1?' en '+esc(finStores()[0].name):''}</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Sin bancos ni papeleo. Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
     <div class="steps">
       <article class="step reveal"><span class="n">01</span><h3>Crea tu cuenta</h3><p>Nombre, cédula y teléfono, solo con números. Con eso ya compras de contado en las dos tiendas.</p></article>
       <article class="step reveal"><span class="n">02</span><h3>Elige tus cuotas</h3><p>${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses. Envías una foto tuya y de tu cédula, y pagas la inicial. Tus fotos y tu ubicación quedan privadas.</p></article>
@@ -546,7 +548,7 @@ function vCatalogo(){
     <div>
       ${stT?`<div class="storehead">${storeMark(stT,44)}<div><b>${esc(stT.name)}</b><span class="muted small">${esc(stT.slogan)}</span></div></div>`:''}
       <div class="toolbar"><div><h1 style="font-size:24px">${esc(f.cat||(stT?'Catálogo de '+stT.name:'Todo el catálogo'))}</h1><span class="muted small">${list.length} producto${list.length===1?'':'s'}</span></div>
-        <div class="chips">${[['','Todos'],['si','Con financiamiento'],['no','Solo contado']].map(([k,l])=>`<button class="chip" data-act="ffin" data-v="${k}" aria-pressed="${(f.fin||'')===k}">${l}</button>`).join('')}</div>
+        <div class="chips">${(stT&&!stT.cuotas?[]:[['','Todos'],['si','Con financiamiento'],['no','Solo contado']]).map(([k,l])=>`<button class="chip" data-act="ffin" data-v="${k}" aria-pressed="${(f.fin||'')===k}">${l}</button>`).join('')}</div>
         <label class="row small">Ordenar por <select data-on="fsort" aria-label="Ordenar"><option value="rel">Relevancia</option><option value="asc" ${f.sort==='asc'?'selected':''}>Menor precio</option><option value="desc" ${f.sort==='desc'?'selected':''}>Mayor precio</option><option value="az" ${f.sort==='az'?'selected':''}>Nombre A–Z</option></select></label></div>
       ${list.length?`<div class="pgrid">${list.map(pcard).join('')}</div>`:`<div class="empty"><h2>No encontramos productos</h2><p>Prueba con otra búsqueda o quita algunos filtros.</p><button class="btn" data-act="clearf">Limpiar filtros</button></div>`}
     </div>
@@ -576,7 +578,7 @@ function vProducto(){
       ${p.fin&&price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*S.cfg.inicialMin))}</div>
         <table class="t"><thead><tr><th>Plan</th><th class="r">Cuota mensual</th><th class="r">Total a pagar</th></tr></thead><tbody>
         ${Object.keys(S.cfg.plans).map(n=>{const fin=r2(price*(1-S.cfg.inicialMin)*(1+S.cfg.plans[n]));return `<tr><td>${n} cuotas</td><td class="r num"><b>${usd(r2(fin/n))}</b></td><td class="r num muted">${usd(r2(fin+price*S.cfg.inicialMin))}</td></tr>`}).join('')}
-        </tbody></table></div>`:p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> Este equipo no está disponible en cuotas.</div>`}
+        </tbody></table></div>`:p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
       ${wa?`<a class="link wa" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Preguntar por WhatsApp</a>`:''}
     </div>
   </section>
@@ -598,7 +600,7 @@ function vCarrito(){
           <div class="row" style="margin-top:6px"><div class="qty"><button data-act="cqty" data-i="${ix}" data-d="-1" aria-label="Menos">−</button><span class="num">${i.qty}</span><button data-act="cqty" data-i="${ix}" data-d="1" aria-label="Más">+</button></div>
           <button class="link small" data-act="crem" data-i="${ix}">Eliminar</button></div></div>
         <div class="pr num" style="margin:0;font-size:18px">${usd(i.unit*i.qty)}</div></div>`; };
-  const finNote = (items, t) => { const nf = items.filter(i=>!P(i.pid).fin);
+  const finNote = (items, t) => { if(!ST(P(items[0].pid).store).cuotas) return `<div class="note small">${esc(ST(P(items[0].pid).store).name)} vende de contado: pagas el total y te lo llevas.</div>`; const nf = items.filter(i=>!P(i.pid).fin);
     return nf.length ? `<div class="note small">${nf.map(i=>esc(i.name)).join(', ')} ${nf.length>1?'se venden':'se vende'} solo de contado. Para pagar en cuotas, quítalo de este pedido.</div>`
       : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*S.cfg.inicialMin))}.</div>`
       : `<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más de esta tienda para poder pagar en cuotas.</div>`; };
@@ -634,7 +636,7 @@ function vCheckout(){
   const co = S.co, k = coCalc();
   const items = cartOf(co.store), tS = ST(co.store);
   const noFin = items.filter(i=>!P(i.pid).fin);
-  const canFin = k.base >= S.cfg.minFin && !noFin.length;
+  const canFin = tS.cuotas && k.base >= S.cfg.minFin && !noFin.length;
   if(!canFin) co.mode='contado';
   co.when = (co.method==='efectivo' || co.later) ? 'despues' : 'ahora';
   if(co.method==='efectivo') co.ship='retiro';
@@ -669,7 +671,7 @@ function vCheckout(){
     <section class="box"><h2><span class="stepn">2</span>Forma de pago</h2>
       <div class="seg seg2">
         <label class="so"><input type="radio" name="mode" value="contado" data-on="mode" ${!fin?'checked':''}><span class="ot">De contado</span><span class="os">${usd(k.total)}</span></label>
-        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
+        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:!tS.cuotas?`${esc(tS.name)} vende solo de contado`:noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
       </div>
       ${fin?`
         <div class="seg seg3">${plans.map(n=>`<label class="so"><input type="radio" name="plan" value="${n}" data-on="plan" ${co.n===n?'checked':''}><span class="ot">${n} cuotas</span><span class="os">${usd(cuotaDe(n))} al mes</span></label>`).join('')}</div>
@@ -790,7 +792,7 @@ function vCuenta(){
         <div class="kpi"><div class="l">Pedidos en curso</div><div class="v num">${act.length}</div></div>
         <div class="kpi ${cr.some(c=>c.st==='en_mora')?'alert':''}"><div class="l">Saldo de créditos</div><div class="v num">${usd(deuda)}</div></div>
         <div class="kpi"><div class="l">Próxima cuota</div><div class="v num" style="font-size:18px">${nxt?`${usd(cuotaDue(nxt.q))}<div class="muted small" style="font-family:var(--f-body);font-weight:500">${nxt.q.due<dayStart(S.today)?'Vencida el ':'Vence el '}${fd(nxt.q.due)}</div>`:'—'}</div></div>
-        <div class="kpi"><div class="l">Cupo disponible para cuotas</div>${S.stores.map(t=>{const c=S.cupos[t.id]||{};return `<div class="cupo-l"><span>${esc(t.name)}</span><b class="num">${usd(c.disponible)}</b></div>`}).join('')}</div>
+        <div class="kpi"><div class="l">Cupo disponible para cuotas</div>${finStores().map(t=>{const c=S.cupos[t.id]||{};return `<div class="cupo-l"><span>${esc(t.name)}</span><b class="num">${usd(c.disponible)}</b></div>`}).join('')}</div>
       </div>
       ${cr.filter(c=>c.st==='en_mora').map(c=>`<div class="note bad">Tu crédito ${c.code} tiene cuotas vencidas. Cada cuota vencida suma ${usd(S.cfg.mora)} de mora. <button class="link" data-act="acct" data-v="creditos">Pagar ahora</button></div>`).join('')}
       ${ords.filter(o=>o.st==='pendiente_pago').map(o=>`<div class="note warn">El pedido ${o.code} está reservado hasta el ${fdt(o.deadline)}. ${o.method==='efectivo'?'Paga en caja al retirarlo.':'<button class="link" data-act="payorder" data-o="'+o.id+'">Subir comprobante</button>'}</div>`).join('')}
@@ -996,7 +998,7 @@ function aInventario(){
     <p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago para cambiarla entre “contado o cuotas” y “solo contado”, o “Editar” para cambiar precio, foto y datos.</p>
     <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Forma de pago</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${list.map(p=>`<tr><td><div class="row" style="gap:10px;flex-wrap:nowrap"><div class="th" style="width:44px;height:44px;flex:none">${img(p)}</div><div><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto en la tienda'}</div>${stCol(p.store)}</div></div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
-      <td class="nw"><button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button></td>
+      <td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>`:'<span class="tag dark">Solo contado</span>'}</td>
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button> <button class="btn sm brand" data-act="prodedit" data-id="${p.id}">Editar</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Todavía no hay productos. Pulsa “Nuevo producto”.</td></tr>'}
     </tbody></table></div>`;
@@ -1020,7 +1022,7 @@ function productModal(id){
       <div class="field" style="grid-column:1/-1"><label for="pf-des">Descripción</label><textarea id="pf-des" rows="2">${esc(p?.desc||'')}</textarea></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-img">Foto del producto <span class="muted">(fondo blanco o liso)</span></label>
         <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div><input id="pf-img" type="file" accept="image/*" data-on="prodimg"></div></div>
-      <label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
+      ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>`:'<p class="muted small" style="grid-column:1/-1">Esta tienda vende solo de contado.</p>'}
       <label class="ck small"><input type="checkbox" id="pf-act" ${!p||p.active?'checked':''}>Visible en la tienda</label>
       <div class="err" id="pf-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="prodsave">${p?'Guardar cambios':'Crear producto'}</button>`, true);
@@ -1043,7 +1045,7 @@ async function saveProduct(){
   if(M.file) imagen = await uploadPublic(await compressImg(M.file, 1200), 'p');
   const body = {id:M.id, tienda_id: $('#pf-st') ? +$('#pf-st').value : null, nombre, marca:$('#pf-mar').value.trim(), categoria:$('#pf-cat').value, precio,
     stock: $('#pf-stk') ? +($('#pf-stk').value||0) : undefined, colores: colores.length ? colores : [{n:'Único', hex:'#777777'}], capacidades, specs,
-    descripcion:$('#pf-des').value.trim(), imagen_url:imagen, financiable:$('#pf-fin').checked, activo:$('#pf-act').checked};
+    descripcion:$('#pf-des').value.trim(), imagen_url:imagen, financiable:$('#pf-fin')?$('#pf-fin').checked:false, activo:$('#pf-act').checked};
   try{ await rpc('guardar_producto', {p: body}); closeModal(); await refresh(); toast(M.id ? 'Producto actualizado.' : 'Producto creado.'); }
   catch(e){ err.textContent = friendly(e); }
 }
