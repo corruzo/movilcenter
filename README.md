@@ -1,7 +1,7 @@
-# MovilCenter
+# Priority One y Papa's Store
 
-Tienda en línea de teléfonos con compra de contado o financiada, verificación de comprobantes de pago, control de cuotas y mora, y panel de administración.
+Tienda en línea de teléfonos para dos tiendas en una sola página: cuentas compartidas, compra de contado o en cuotas, comprobantes de pago, mora automática y un panel de administración por tienda.
 
-- **Página web:** carpeta `tienda/` (HTML, CSS y JavaScript sin compilación), publicada en Vercel.
-- **Base de datos y lógica:** carpeta `supabase/` (PostgreSQL en Supabase).
-- **Guía paso a paso:** [LEEME.md](LEEME.md)
+- Página: carpeta `tienda/` (HTML, CSS y JavaScript, sin compilar). Se publica en Netlify.
+- Base de datos: Supabase (archivos en `supabase/`).
+- Instrucciones paso a paso: **LEEME.md**.

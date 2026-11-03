@@ -483,3 +483,112 @@ body.is-home main{padding-top:0}
   .story .hero-copy h1 .w{animation:none;opacity:1;transform:none}
   .ticker .track{animation:none}
 }
+
+/* =====================================================================
+   Dos tiendas: logos, marcas por tienda y portada estilo demo 1
+   ===================================================================== */
+.duo{display:flex;align-items:center;gap:10px}
+.duo-i{display:flex;align-items:center;gap:8px}
+.duo-i b{font-family:var(--f-head);font-weight:700;font-size:17px;white-space:nowrap;color:inherit}
+.duo-x{color:var(--gold);font-weight:600;font-size:15px;opacity:.8}
+.smark{display:block;width:auto;object-fit:contain;flex:none}
+.smark.mono{display:grid;place-items:center;border-radius:9px;background:#0B0B0D;color:var(--gold-l);font-family:var(--f-head);font-weight:800;letter-spacing:.02em;box-shadow:inset 0 0 0 1.5px var(--gold)}
+.stchip{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;white-space:nowrap}
+.stchip .smark.mono{border-radius:5px}
+.pc .brandname .by{color:var(--brand-2);text-transform:none;letter-spacing:0}
+.soldby{justify-self:start;border:1px solid var(--line);background:var(--white);border-radius:999px;padding:5px 12px 5px 6px;display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.soldby:hover{border-color:var(--gold)}
+.storehead{display:flex;align-items:center;gap:12px;background:var(--night);color:#F2F0EA;border-radius:12px;padding:12px 16px;margin-bottom:14px}
+.storehead b{display:block;font-family:var(--f-head);font-size:18px}
+.storehead .muted{color:#A09EA6}
+nav.cats button.stb{color:var(--gold-l)}
+.cgroups{display:grid;gap:16px}
+.cg-h{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.cg-h .stchip{font-size:15px}
+.cg-f{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end;border-top:1px solid var(--line);padding-top:12px;margin-top:6px}
+.cg-f .sl.tot{margin:0}
+.cupo-l{display:flex;justify-content:space-between;gap:10px;font-size:14px;margin-top:4px}
+.cupo-l b{font-family:var(--f-head)}
+@media (max-width:640px){.cg-f{grid-template-columns:1fr}.duo-i b{display:none}}
+@media (max-width:960px){header.main .duo-i b{font-size:15px}}
+
+/* ---- portada: polvo dorado, halo, anillos, degradados (demo 1) ---- */
+.story .dust{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.8}
+.story .halo{position:absolute;left:50%;top:50%;width:760px;height:760px;margin:-380px 0 0 -380px;border-radius:50%;background:radial-gradient(closest-side,rgba(210,174,62,.2),rgba(210,174,62,.09) 40%,rgba(210,174,62,.03) 70%,transparent);pointer-events:none}
+.story .rings{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.story .rings i{position:absolute;border-radius:50%;border:1px solid rgba(232,204,114,.12);left:50%;top:50%;transform:translate(-50%,-50%)}
+.story .rings i:nth-child(1){width:560px;height:560px}.story .rings i:nth-child(2){width:820px;height:820px;border-color:rgba(232,204,114,.08)}.story .rings i:nth-child(3){width:1100px;height:1100px;border-color:rgba(232,204,114,.05)}
+.story .f.back{background:linear-gradient(135deg,#3B3A40 0%,#1D1C21 38%,#2A292E 62%,#121115 100%)}
+.eyebrow{display:block;font:700 12.5px var(--f-head);letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.story .hero-copy .eyebrow{margin-bottom:16px}
+.story .say .k{font:700 12px var(--f-head);letter-spacing:.22em;text-transform:uppercase}
+.story .say h2 em,.story .hero-copy h1 em .w.g,.dk h2.big em{background:linear-gradient(100deg,#F4DE8F 0%,#D2AE3E 45%,#A5821F 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.story .say h2 em{display:inline;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.story .hero-copy h1 .w{filter:blur(10px)}
+@keyframes wordIn{to{opacity:1;transform:none;filter:blur(0)}}
+.story .btn.buy{background:linear-gradient(180deg,#E8CC72,#C9A227);border-color:#C9A227;border-radius:999px;box-shadow:0 8px 24px -8px rgba(210,174,62,.6)}
+.story .btn.ghost{border-radius:999px}
+.ticker{padding:22px 0;background:#0B0B0D}
+.ticker span{font:700 clamp(20px,2.4vw,30px) var(--f-head);color:#4A4850;letter-spacing:-.01em}
+.ticker span b{color:var(--gold)}
+.ticker span::before{content:"";margin-right:44px}
+
+/* ---- secciones oscuras de la portada ---- */
+.dk{background:#0A0A0C;color:#F2F0EA}
+.dk .blk{padding:90px 0}
+.dk h2,.dk h3{color:#F2F0EA}
+.dk h2.big{font-size:clamp(32px,4.4vw,56px);font-weight:800;margin-top:12px;letter-spacing:-.02em;line-height:1.08}
+.dk .lead{color:#A09EA6;font-size:18px;margin-top:14px;max-width:56ch}
+.dk .reveal{transition:opacity .8s cubic-bezier(.2,.8,.2,1),transform .8s cubic-bezier(.2,.8,.2,1)}
+.dk .reveal:not(.in){opacity:.15;transform:translateY(30px)}
+.dk .btn.ghost{background:transparent;color:#F2F0EA;border-color:#3A3A41;border-radius:999px}
+.dk .btn.ghost:hover{border-color:var(--gold)}
+.dk .btn.buy{border-radius:999px}
+.stores{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.storecard{display:grid;gap:18px;border-radius:20px;padding:28px;background:linear-gradient(180deg,#151518,#0F0F11);border:1px solid #26262B}
+.sc-top{display:flex;align-items:center;gap:16px}
+.sc-top h3{font-size:24px}
+.sc-top p{color:#A09EA6;margin-top:4px}
+.sc-meta{display:flex;gap:18px;flex-wrap:wrap;color:#A09EA6;font-size:14px}
+.sc-meta b{color:var(--gold-l)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.step{border-radius:20px;padding:26px 26px 30px;background:linear-gradient(180deg,#141417,#0E0E10);border:1px solid #26262B}
+.step .n{display:block;font:800 52px var(--f-head);color:transparent;-webkit-text-stroke:1.2px rgba(210,174,62,.55);letter-spacing:-.02em}
+.step h3{font-size:20px;margin-top:12px}
+.step p{color:#A09EA6;margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);margin-top:52px;border-top:1px solid #26262B}
+.stats div{padding:26px 22px;border-left:1px solid #26262B}
+.stats div:first-child{border-left:0;padding-left:0}
+.stats b{display:block;font:800 clamp(38px,4.4vw,60px) var(--f-head);color:var(--gold);letter-spacing:-.03em}
+.stats span{color:#A09EA6}
+.filt{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:28px 0 20px}
+.filt button{cursor:pointer;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px;padding:14px 16px;border-radius:14px;background:#111114;border:1px solid #26262B;text-align:left;color:#F2F0EA}
+.filt button b{font:700 15px var(--f-head)}
+.filt button span{grid-column:1;font-size:13.5px;color:#A09EA6}
+.filt button i{grid-row:1/3;grid-column:2;font:700 15px var(--f-head);font-style:normal;min-width:32px;height:32px;border-radius:999px;display:grid;place-items:center;background:#1E1E23;color:#D6D4DC}
+.filt button:hover{border-color:#4A4433}
+.filt button[aria-pressed="true"]{background:#1A160B;border-color:var(--gold)}
+.filt button[aria-pressed="true"] i{background:var(--gold);color:#141006}
+.dk .pc{background:linear-gradient(180deg,#151518,#0F0F11);border-color:#26262B;border-radius:18px}
+.dk .pc:hover{border-color:#4A4433;box-shadow:none}
+.dk .pc .ph{background:radial-gradient(80% 70% at 50% 40%,#2A2312,#141416)}
+.dk .pc .nm{color:#F2F0EA}
+.dk .pc .sp,.dk .pc .brandname{color:#8C8A93}
+.dk .pc .pr{color:#F2F0EA}
+.dk .pc .cuo{color:var(--gold-l)}
+.dk .pc .btn:not(.buy){background:transparent;color:#F2F0EA;border-color:#3A3A41}
+.dk .empty{background:#111114;border-color:#26262B;color:#A09EA6}
+@media (max-width:900px){
+  .stores,.steps{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr 1fr}.stats div:nth-child(3){border-left:0;padding-left:0}
+  .filt{grid-template-columns:1fr}
+  .story .halo{width:520px;height:520px;margin:-260px 0 0 -260px}
+  .story .say h2 em{display:inline}
+}
+@media (prefers-reduced-motion:reduce){.dk .reveal:not(.in){opacity:1;transform:none}.story .dust{display:none}}
+
+.story .say,.story .hero-copy{text-shadow:0 2px 18px rgba(0,0,0,.9)}
+.story .say h2 em,.story .hero-copy h1 em .w.g{text-shadow:none}
+.content td .row b{white-space:nowrap}
+.content td .row > div:last-child{min-width:140px}
+.dk a.btn{text-decoration:none}

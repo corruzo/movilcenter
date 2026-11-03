@@ -8,16 +8,10 @@ window.TIENDA = {
   supabaseAnonKey: 'sb_publishable_RUix41H20CEa6AyZKHYdtw_hpHqdW67',       // la "Publishable key" (sb_publishable_...) o la "anon public". Es pública, no es secreta.
                                                   // NUNCA pegues aquí la "Secret key" ni la "service_role".
 
-  // 2. Datos de la marca
+  // 2. Datos generales de la página. El nombre, logo, WhatsApp, RIF y datos de pago
+  //    de cada tienda se cambian desde el panel de administración > Configuración.
   marca: {
-    a: 'Movil',                    // primera parte del nombre (negro)
-    b: 'Center',                   // segunda parte del nombre (dorado)
-    legal: 'MovilCenter C.A.',     // razón social
-    rif: 'J-00000000-0',
-    ciudad: 'Caracas',
-    whatsapp: '584140000000',      // número con código de país, sin + ni espacios
-    correo: 'ventas@ejemplo.com',
-    horario: 'Lunes a sábado, 9:00 a 18:00',
-    logo: ''                       // opcional: ruta de tu logo, ej. 'logo.png' (súbelo junto a estos archivos)
+    legal: "Priority One y Papa's Store",   // aparece en el pie de página
+    ciudad: 'Caracas'                       // se muestra si una tienda no tiene dirección
   }
 };
