@@ -17,6 +17,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/05_actualizacion.sql` | Verificación de identidad, módulo “Trabaja con nosotros”, equipos solo de contado y cédula/teléfono solo con números. |
 | `supabase/06_ajustes.sql` | Verificación solo para comprar en cuotas y preguntas de empleo para ventas online. |
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
+| `supabase/09_encargos.sql` | Encargos: el cliente pide un teléfono que no está en el catálogo o está agotado, a la tienda que elija. |
 | `supabase/07_multitienda.sql` | **Las dos tiendas**: crea Priority One y Papa's Store, separa catálogo, pedidos, créditos y pagos por tienda, y crea los paneles por tienda. |
 
 ---
@@ -37,7 +38,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 3. Opcional: si quieres ver productos de ejemplo mientras pruebas, repite con `supabase/02_catalogo.sql`.
 4. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 5. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
-6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql` y `supabase/08_formas_de_pago.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
+6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql` y `supabase/09_encargos.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;
@@ -122,6 +123,7 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
 
 - **Compras en las dos tiendas:** el cliente puede tener productos de las dos en el carrito, pero cada tienda se paga por separado (un pedido por tienda), con los datos de pago de esa tienda.
 - **Créditos:** el cupo y el máximo de créditos son por tienda (cada tienda arriesga su dinero). Si el cliente tiene una cuota vencida en cualquiera de las dos, no puede pedir un crédito nuevo hasta ponerse al día.
+- **Encargos:** si un cliente busca un modelo que no está o está agotado, lo encarga desde **Encargos** (o desde el botón del equipo agotado), eligiendo la tienda. Le llega al panel de esa tienda en **Encargos** y el cliente lo envía también por WhatsApp. El admin le escribe con precio y fecha y va cambiando el estado: nuevo, contactado, en camino, listo, entregado o descartado.
 - **Identidad:** el cliente la verifica una sola vez y sirve para las dos tiendas.
 
 - **Ventas:** cuántas ventas fueron de contado y cuántas financiadas cada mes, con montos, porcentaje financiado y el detalle de cada venta.
