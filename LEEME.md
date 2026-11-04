@@ -19,6 +19,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
 | `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
+| `supabase/12_cuotas_fijas.sql` | El admin fija en cuántas cuotas se paga cada equipo; frases de confianza en la portada. |
 | `supabase/09_encargos.sql` | Encargos: el cliente pide un teléfono que no está en el catálogo o está agotado, a la tienda que elija. |
 | `supabase/07_multitienda.sql` | **Las dos tiendas**: crea Priority One y Papa's Store, separa catálogo, pedidos, créditos y pagos por tienda, y crea los paneles por tienda. |
 
@@ -40,7 +41,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 3. Opcional: si quieres ver productos de ejemplo mientras pruebas, repite con `supabase/02_catalogo.sql`.
 4. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 5. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
-6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql`, `supabase/09_encargos.sql`, `supabase/10_cuotas_por_equipo.sql` y `supabase/11_online_y_planes.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
+6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql`, `supabase/09_encargos.sql`, `supabase/10_cuotas_por_equipo.sql`, `supabase/11_online_y_planes.sql` y `supabase/12_cuotas_fijas.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;

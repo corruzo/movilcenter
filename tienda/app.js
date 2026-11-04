@@ -283,8 +283,10 @@ const finCuota = (price, n=6, ini=S.cfg.inicialMin) => r2(price*(1-ini)*(1+(S.cf
 const allPlans = () => Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
 // inicial y cuotas propias de cada equipo (si el admin no las fijó, se usan las generales)
 const pIni = p => p.ini ?? S.cfg.inicialMin;
-const pPlans = p => { const all = allPlans(); return p.plans ? all.filter(n=>p.plans.includes(n)) : all; };
-const pShowPlan = p => { const ps = pPlans(p); return ps.includes(6) ? 6 : ps[ps.length-1]; };
+// el admin define en cuántas cuotas se paga cada equipo (una sola opción); si no lo definió, se usa el plan intermedio
+const pPlan = p => { const all = allPlans(); const n = (p.plans||[]).find(x=>all.includes(x)); return n ?? midPlan(); };
+const pPlans = p => [pPlan(p)];
+const pShowPlan = p => pPlan(p);
 // para un pedido con varios equipos: la inicial más alta y las cuotas que todos permiten
 const cartFin = items => { const ps = items.map(i=>P(i.pid)).filter(Boolean);
   return { ini: Math.max(S.cfg.inicialMin, ...ps.map(pIni)), plans: allPlans().filter(n=>ps.every(p=>pPlans(p).includes(n))) }; };
@@ -382,7 +384,7 @@ function storyHTML(){
     <div class="hero-copy" id="hero">
       <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
       <h1>${['Estrénalo','hoy.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Págalo','en','cuotas.'].map((w,i)=>`<span class="w g" style="animation-delay:${.3+i*.09}s">${w}</span>`).join(' ')}</em></h1>
-      <p>${finStores().length?`En ${finStores().map(t=>esc(t.name)).join(' y ')} pagas una inicial desde el ${iniPct}% y el resto en ${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses.`:''}${cashStores().length?` En ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado y te lo llevas hoy.`:''} Una sola cuenta para las dos tiendas.</p>
+      <p>${finStores().length?`En ${finStores().map(t=>esc(t.name)).join(' y ')} pagas una inicial y el resto en cuotas, sin bancos.`:''}${cashStores().length?` En ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado y te lo llevas hoy.`:''} Una sola cuenta para las dos tiendas.</p>
       <div class="row"><button class="btn buy" data-act="cat" data-v="">Ver equipos →</button>${u?`<button class="btn ghost" data-act="go" data-v="financiamiento">Cómo funcionan las cuotas</button>`:`<button class="btn ghost" data-act="go" data-v="registro">Crear cuenta</button>`}</div>
     </div>
     <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
@@ -393,11 +395,11 @@ function storyHTML(){
           <div class="f side r"></div><div class="f side l"></div>
           <div class="f back"><div class="cam"><div class="lens a"></div><div class="lens b"></div><div class="lens c"></div><div class="flash"></div></div></div>
           <div class="f front"><div class="screen" id="screen"><div class="isl"></div><div class="time">10:30</div><div class="date">${new Date().toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'})}</div>
-            <div class="offer"><small>Llévalo hoy</small><b class="num">${iniPct}% de inicial</b><span>y ${plans.join(', ').replace(/, (\d+)$/,' o $1')} cuotas</span></div><div class="glare"></div></div></div>
+            <div class="offer"><small>Llévalo hoy</small><b class="num">${iniPct}% de inicial</b><span>y el resto en cuotas</span></div><div class="glare"></div></div></div>
         </div>
         <div class="layers" id="layers">
           <div class="lay l-back"><span class="lbl">Equipos originales</span></div>
-          <div class="lay l-bat" data-t="${plans.join(' · ')} meses"><span class="lbl">Planes de ${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses</span></div>
+          <div class="lay l-bat" data-t="Tienda confiable"><span class="lbl">Equipos nuevos y sellados</span></div>
           <div class="lay l-board"><span class="lbl">Inicial desde ${iniPct}%</span></div>
           <div class="lay l-frame"><span class="lbl">Garantía en cada equipo</span></div>
           <div class="lay l-screen" data-t="Contado o cuotas"><span class="lbl">Envíos a todo el país</span></div>
@@ -423,7 +425,7 @@ function jobCard(inTrabaja){
 }
 function vInicio(){
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b), iniPct = Math.round(S.cfg.inicialMin*100);
-  const tick = [`Tienda <b>100% online</b>`, `Contado <b>o</b> cuotas`, `Inicial desde <b>${iniPct}%</b>`, `Planes de <b>${plans.join(' · ')}</b> meses`, `Envíos a <b>todo el país</b>`];
+  const tick = [`Tienda <b>100% online</b>`, `Contado <b>o</b> cuotas`, `Inicial desde <b>${iniPct}%</b>`, `Tienda <b>confiable</b>`, `Equipos <b>sellados</b>`, `Envíos a <b>todo el país</b>`];
   const hf = S.homeFin || '';
   const feat = S.products.filter(p=>p.stock>0 && (!hf || (hf==='si')===p.fin)).sort((a,b)=>(a.cat==='Teléfonos'?0:1)-(b.cat==='Teléfonos'?0:1)).slice(0,8);
   const cnt = f => S.products.filter(p=>!f || (f==='si')===p.fin).length;
@@ -441,7 +443,7 @@ function vInicio(){
     <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas${finStores().length===1?' en '+esc(finStores()[0].name):''}</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Sin bancos ni papeleo. Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
     <div class="steps">
       <article class="step reveal"><span class="n">01</span><h3>Crea tu cuenta</h3><p>Nombre, cédula y teléfono, solo con números. Con eso ya compras de contado en las dos tiendas.</p></article>
-      <article class="step reveal"><span class="n">02</span><h3>Elige tus cuotas</h3><p>${plans.join(', ').replace(/, (\d+)$/,' o $1')} meses. Envías una foto tuya y de tu cédula, y pagas la inicial. Tus fotos y tu ubicación quedan privadas.</p></article>
+      <article class="step reveal"><span class="n">02</span><h3>Elige tu equipo</h3><p>Cada equipo muestra su inicial y sus cuotas. Envías una foto tuya y de tu cédula, y pagas la inicial. Tus fotos y tu ubicación quedan privadas.</p></article>
       <article class="step reveal"><span class="n">03</span><h3>Recíbelo</h3><p>La tienda aprueba tu crédito y te lo envía. Pagas cada cuota desde tu cuenta.</p></article>
     </div>
     <div class="stats reveal">
@@ -595,10 +597,9 @@ function vProducto(){
       </div>
       <div class="row"><button class="btn buy" style="flex:1" ${out?'disabled':''} data-act="add" data-id="${p.id}">Agregar al carrito</button><button class="btn brand" style="flex:1" ${out?'disabled':''} data-act="buynow" data-id="${p.id}">Comprar ahora</button></div>
       ${out?`<div class="note warn"><b>Está agotado.</b> Puedes encargarlo y ${esc(ST(p.store).name)} te avisa por WhatsApp cuando llegue. <div style="margin-top:8px"><button class="btn sm brand" data-act="encargar" data-id="${p.id}">Encargar este equipo</button></div></div>`:''}
-      ${p.fin&&price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*pIni(p)))} (${Math.round(pIni(p)*100)}%)</div>
-        <table class="t"><thead><tr><th>Plan</th><th class="r">Cuota mensual</th><th class="r">Total a pagar</th></tr></thead><tbody>
-        ${pPlans(p).map(n=>{const fin=r2(price*(1-pIni(p))*(1+S.cfg.plans[n]));return `<tr><td>${n} cuotas</td><td class="r num"><b>${usd(r2(fin/n))}</b></td><td class="r num muted">${usd(r2(fin+price*pIni(p)))}</td></tr>`}).join('')}
-        </tbody></table></div>`:p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
+      ${p.fin&&price>=S.cfg.minFin?(()=>{ const n = pPlan(p), down = r2(price*pIni(p)), fin = r2(price*(1-pIni(p))*(1+S.cfg.plans[n]));
+        return `<div class="finbox"><div class="h">Llévalo financiado</div>
+        <table class="t"><tbody><tr><td>Inicial (${Math.round(pIni(p)*100)}%)</td><td class="r num"><b>${usd(down)}</b></td></tr><tr><td>${n} cuotas mensuales de</td><td class="r num"><b>${usd(r2(fin/n))}</b></td></tr><tr><td class="muted">Total a pagar</td><td class="r num muted">${usd(r2(down+fin))}</td></tr></tbody></table></div>`; })():p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
       ${wa?`<a class="link wa" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Preguntar por WhatsApp</a>`:''}
     </div>
   </section>
@@ -623,7 +624,7 @@ function vCarrito(){
   const finNote = (items, t) => { if(!ST(P(items[0].pid).store).cuotas) return `<div class="note small">${esc(ST(P(items[0].pid).store).name)} vende de contado: pagas el total y te lo llevas.</div>`; const nf = items.filter(i=>!P(i.pid).fin);
     return nf.length ? `<div class="note small">${nf.map(i=>esc(i.name)).join(', ')} ${nf.length>1?'se venden':'se vende'} solo de contado. Para pagar en cuotas, quítalo de este pedido.</div>`
       : !cartFin(items).plans.length ? `<div class="note small">Estos equipos no tienen un plan de cuotas en común. Para pagar en cuotas, cómpralos en pedidos separados.</div>`
-      : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*cartFin(items).ini))}, en ${cartFin(items).plans.join(', ').replace(/, (\d+)$/,' o $1')} cuotas.</div>`
+      : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*cartFin(items).ini))} y ${cartFin(items).plans[0]} cuotas.</div>`
       : `<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más de esta tienda para poder pagar en cuotas.</div>`; };
   return `<h1 style="margin-bottom:6px">Carrito de compras</h1>
   ${groups.length>1?`<p class="muted" style="margin-bottom:16px">Tienes productos de ${groups.length} tiendas. Cada tienda se paga y se despacha por separado, así que harás un pedido por tienda.</p>`:'<div style="height:12px"></div>'}
@@ -660,7 +661,7 @@ function vCheckout(){
   const cf = cartFin(items);
   const canFin = tS.cuotas && k.base >= S.cfg.minFin && !noFin.length && cf.plans.length > 0;
   if(co.ini < cf.ini) co.ini = cf.ini;
-  if(cf.plans.length && !cf.plans.includes(co.n)) co.n = cf.plans.includes(6) ? 6 : cf.plans[cf.plans.length-1];
+  if(cf.plans.length) co.n = cf.plans[0];
   if(!canFin) co.mode='contado';
   co.when = co.later ? 'despues' : 'ahora';
   if(!S.cfg.envio[co.ship]) co.ship = Object.keys(S.cfg.envio)[0];
@@ -694,10 +695,10 @@ function vCheckout(){
     <section class="box"><h2><span class="stepn">2</span>Forma de pago</h2>
       <div class="seg seg2">
         <label class="so"><input type="radio" name="mode" value="contado" data-on="mode" ${!fin?'checked':''}><span class="ot">De contado</span><span class="os">${usd(k.total)}</span></label>
-        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:!tS.cuotas?`${esc(tS.name)} vende solo de contado`:!cf.plans.length?'Sin plan de cuotas en común':noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
+        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`${co.n} cuotas de ${usd(cuotaDe(co.n))}`:!tS.cuotas?`${esc(tS.name)} vende solo de contado`:!cf.plans.length?'Estos equipos tienen cuotas distintas: cómpralos por separado':noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
       </div>
       ${fin?`
-        <div class="seg seg3">${plans.map(n=>`<label class="so"><input type="radio" name="plan" value="${n}" data-on="plan" ${co.n===n?'checked':''}><span class="ot">${n} cuotas</span><span class="os">${usd(cuotaDe(n))} al mes</span></label>`).join('')}</div>
+        <div class="note info small">Este equipo se paga en <b>${co.n} cuotas mensuales de ${usd(cuotaDe(co.n))}</b>. El número de cuotas lo define ${esc(tS.name)} para cada equipo.</div>
         <div class="field rng"><label for="co-ini">Inicial: <b id="ini-l">${Math.round(co.ini*100)}% · ${usd(k.down)}</b></label><input id="co-ini" type="range" min="${Math.round(cf.ini*100)}" max="${Math.round(S.cfg.inicialMax*100)}" step="5" value="${Math.round(co.ini*100)}" data-on="ini"></div>
         <p class="muted small">Primera cuota hacia el ${fd(addMonths(S.today,1))}. Si pagas una cuota después de su fecha, se suma ${usd(S.cfg.mora)}. <button class="link small" data-act="toggleplan">${co.showPlan?'Ocultar fechas':'Ver todas las fechas'}</button></p>
         ${co.showPlan?`<div class="tbl"><table class="t"><tbody>${Array.from({length:co.n},(_,i)=>`<tr><td>Cuota ${i+1}</td><td>${fd(addMonths(S.today,i+1))}</td><td class="r num">${usd(i===co.n-1?r2(k.financed-k.cuota*(co.n-1)):k.cuota)}</td></tr>`).join('')}</tbody></table></div>`:''}
@@ -756,35 +757,23 @@ function vNuevaClave(){
 }
 
 function vFinanciamiento(){
-  const n0 = midPlan();
-  const sim = S.sim || (S.sim = {amt:389, n:n0, ini:Math.round(S.cfg.inicialMin*100)});
-  if(!(sim.n in S.cfg.plans)) sim.n = n0;
-  const down = r2(sim.amt*sim.ini/100), fin = r2((sim.amt-down)*(1+S.cfg.plans[sim.n])), qq = r2(fin/sim.n);
-  const ok = sim.amt >= S.cfg.minFin;
+  const eq = S.products.filter(p=>p.active!==false && p.fin && ST(p.store).cuotas && p.price>=S.cfg.minFin).sort((a,b)=>a.price-b.price);
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>Financiamiento</span></div>
-  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu equipo pagando una inicial y el resto en cuotas mensuales fijas, sin trámites bancarios.</p>
+  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu equipo pagando una inicial y el resto en cuotas mensuales fijas, sin trámites bancarios. ${finStores().length?`Disponible en ${finStores().map(t=>esc(t.name)).join(' y ')}.`:''} La inicial y el número de cuotas de cada equipo los define la tienda.</p>
   <div class="two">
-    <section class="box"><h2>Simula tus cuotas</h2>
-      <div class="fg">
-        <div class="field"><label for="s-amt">Precio del equipo (USD)</label><input id="s-amt" inputmode="decimal" value="${sim.amt}" data-on="simamt"></div>
-        <div class="field"><label for="s-n">Plan</label><select id="s-n" data-on="simn">${Object.keys(S.cfg.plans).map(n=>`<option value="${n}" ${+n===sim.n?'selected':''}>${n} cuotas · recargo ${Math.round(S.cfg.plans[n]*100)}%</option>`).join('')}</select></div>
-        <div class="field rng" style="grid-column:1/-1"><label for="s-ini">Inicial: ${sim.ini}% · ${usd(down)}</label><input id="s-ini" type="range" min="${Math.round(S.cfg.inicialMin*100)}" max="${Math.round(S.cfg.inicialMax*100)}" step="5" value="${sim.ini}" data-on="simini"></div>
-      </div>
-      ${ok?`<div class="kpis" style="grid-template-columns:repeat(3,1fr)">
-        <div class="kpi"><div class="l">Pagas hoy</div><div class="v num">${usd(down)}</div></div>
-        <div class="kpi"><div class="l">${sim.n} cuotas de</div><div class="v num">${usd(qq)}</div></div>
-        <div class="kpi"><div class="l">Total</div><div class="v num">${usd(r2(down+fin))}</div></div></div>`
-      :`<div class="note warn">El monto mínimo para financiar es ${usd(S.cfg.minFin)}.</div>`}
+    <section class="box"><h2>Equipos en cuotas</h2>
+      ${eq.length?`<div class="tbl"><table class="t"><thead><tr><th>Equipo</th><th class="r">Precio</th><th class="r">Inicial</th><th class="r">Cuotas</th></tr></thead><tbody>
+      ${eq.map(p=>{const n=pPlan(p);return `<tr><td><button class="link" data-act="pd" data-id="${p.id}">${esc(p.name)}</button></td><td class="r num">${usd(p.price)}</td><td class="r num">${usd(r2(p.price*pIni(p)))}</td><td class="r num nw">${n} × ${usd(finCuota(p.price, n, pIni(p)))}</td></tr>`}).join('')}
+      </tbody></table></div>`:'<p class="muted">Por ahora no hay equipos en cuotas.</p>'}
     </section>
     <aside class="box"><h2>Condiciones</h2>
       <table class="spec">
-        <tr><td>Inicial mínima</td><td>${Math.round(S.cfg.inicialMin*100)}% del precio</td></tr>
-        <tr><td>Planes</td><td>${Object.entries(S.cfg.plans).map(([n,p])=>`${n} cuotas (+${Math.round(p*100)}%)`).join(', ')}</td></tr>
+        <tr><td>Inicial y cuotas</td><td>Las define la tienda para cada equipo</td></tr>
         <tr><td>Compra mínima</td><td>${usd(S.cfg.minFin)}</td></tr>
         <tr><td>Mora</td><td>${usd(S.cfg.mora)} fijos por cada cuota pagada después de su vencimiento</td></tr>
         <tr><td>Cupo inicial</td><td>${usd(S.cfg.cupoBase)} en cada tienda; sube ${usd(S.cfg.cupoPorLiq)} por cada crédito liquidado en esa tienda</td></tr>
         <tr><td>Créditos simultáneos</td><td>Máximo ${S.cfg.maxCreditos} por tienda</td></tr>
-        <tr><td>Requisitos</td><td>Cuenta registrada con cédula y no tener cuotas vencidas</td></tr>
+        <tr><td>Requisitos</td><td>Cuenta registrada con cédula, verificación de identidad y no tener cuotas vencidas</td></tr>
       </table>
     </aside>
   </div>`;
@@ -1049,7 +1038,7 @@ function aInventario(){
     <p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela${admCuo()?' o el crédito no se aprueba':''}. ${admCuo()?'Pulsa la forma de pago para cambiarla entre “contado o cuotas” y “solo contado”, o “Editar”':'Pulsa “Editar”'} para cambiar precio, foto y datos.</p>
     <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th>${admCuo()?'<th>Forma de pago</th>':''}<th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${list.map(p=>`<tr><td><div class="row" style="gap:10px;flex-wrap:nowrap"><div class="th" style="width:44px;height:44px;flex:none">${img(p)}</div><div><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto en la tienda'}</div>${stCol(p.store)}</div></div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
-      ${!admCuo()?'':`<td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>${p.fin?`<div class="muted small" style="margin-top:4px">Inicial ${Math.round(pIni(p)*100)}% · ${pPlans(p).join('/')} cuotas</div>`:''}`:'<span class="tag dark">Solo contado</span>'}</td>`}
+      ${!admCuo()?'':`<td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>${p.fin?`<div class="muted small" style="margin-top:4px">Inicial ${Math.round(pIni(p)*100)}% · ${pPlan(p)} cuotas</div>`:''}`:'<span class="tag dark">Solo contado</span>'}</td>`}
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button> <button class="btn sm brand" data-act="prodedit" data-id="${p.id}">Editar</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Todavía no hay productos. Pulsa “Nuevo producto”.</td></tr>'}
     </tbody></table></div>`;
@@ -1075,7 +1064,7 @@ function productModal(id){
         <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div><input id="pf-img" type="file" accept="image/*" data-on="prodimg"></div></div>
       ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
       <div class="field"><label for="pf-ini">Inicial mínima de este equipo (%)</label><input id="pf-ini" inputmode="numeric" data-digits="2" value="${p&&p.ini!=null?Math.round(p.ini*100):''}" placeholder="${Math.round(S.cfg.inicialMin*100)} (general)"><span class="hint">Déjalo vacío para usar la inicial general (${Math.round(S.cfg.inicialMin*100)}%).</span></div>
-      <div class="field"><label>Cuotas permitidas</label><div class="row">${allPlans().map(n=>`<label class="ck small"><input type="checkbox" data-pfplan="${n}" ${!p||!p.plans||p.plans.includes(n)?'checked':''}>${n} cuotas</label>`).join('')}</div><span class="hint">Para agregar otros planes (por ejemplo 12 cuotas) ve a Configuración.</span></div>
+      <div class="field"><label for="pf-plan">Número de cuotas</label><select id="pf-plan">${allPlans().map(n=>`<option value="${n}" ${(p?pPlan(p):midPlan())===n?'selected':''}>${n} cuotas (recargo ${r2(S.cfg.plans[n]*100)}%)</option>`).join('')}</select><span class="hint">El cliente paga este equipo en ese número de cuotas. Para tener otras opciones ve a Configuración.</span></div>
       <div class="note small" id="pf-sim" style="grid-column:1/-1"></div>`:''}
       <label class="ck small"><input type="checkbox" id="pf-act" ${!p||p.active?'checked':''}>Visible en la tienda</label>
       <div class="err" id="pf-err" style="grid-column:1/-1"></div>
@@ -1086,10 +1075,10 @@ function productModal(id){
 function prodSim(){
   const el = $('#pf-sim'); if(!el) return;
   const precio = parseAmt($('#pf-pre').value), iv = $('#pf-ini').value.trim(), ini = iv==='' ? S.cfg.inicialMin : (+iv)/100;
-  const ps = [...document.querySelectorAll('[data-pfplan]')].filter(x=>x.checked).map(x=>+x.dataset.pfplan);
+  const ps = $('#pf-plan') ? [+$('#pf-plan').value] : [];
   if(!(precio>0) || !$('#pf-fin').checked || !ps.length){ el.hidden = true; return; } el.hidden = false;
   const down = r2(precio*ini);
-  el.innerHTML = `<b>Ejemplo con este precio:</b> inicial ${Math.round(ini*100)}% = ${usd(down)}, y luego ` + ps.map(n=>`${n} cuotas de ${usd(finCuota(precio, n, ini))}`).join(' · ') + '.';
+  el.innerHTML = `<b>El cliente pagará:</b> inicial de ${usd(down)} (${Math.round(ini*100)}%) y ` + ps.map(n=>`${n} cuotas de ${usd(finCuota(precio, n, ini))}`).join(' · ') + '.';
 }
 async function uploadPublic(blob, folder){
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.jpg`;
@@ -1114,9 +1103,7 @@ async function saveProduct(){
   if($('#pf-ini')){
     const iv = $('#pf-ini').value.trim();
     if(iv!==''){ const v = +iv; if(!(v>=0 && v<=Math.round(S.cfg.inicialMax*100))){ err.textContent = `La inicial debe estar entre 0% y ${Math.round(S.cfg.inicialMax*100)}%.`; return; } finIni = r2(v/100); }
-    const ch = [...document.querySelectorAll('[data-pfplan]')].filter(x=>x.checked).map(x=>+x.dataset.pfplan);
-    if(body.financiable && !ch.length){ err.textContent = 'Marca al menos un plan de cuotas, o desmarca “Se puede pagar en cuotas”.'; return; }
-    finPlans = ch.length===allPlans().length ? null : ch;
+    finPlans = [+$('#pf-plan').value];
   }
   try{ const pid = await rpc('guardar_producto', {p: body});
     if($('#pf-ini')) await rpc('ajustar_financiamiento', {pid: M.id || pid, p_inicial: finIni, p_planes: finPlans});
@@ -1154,8 +1141,8 @@ function aConfig(){
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-cupo">Cupo inicial por cliente en cada tienda (USD)</label><input id="c-cupo" inputmode="decimal" value="${c.cupoBase}"></div>
     </div>
-    ${admCuo()?`<h3>Planes de cuotas</h3>
-    <p class="muted small" style="margin-top:-8px">Agrega o quita planes y pon el recargo de cada uno. Luego, en Inventario, eliges qué planes acepta cada equipo. La inicial no cambia con el plan: el resto del precio, más el recargo, se divide entre las cuotas.</p>
+    ${admCuo()?`<h3>Opciones de cuotas</h3>
+    <p class="muted small" style="margin-top:-8px">Son las opciones que puedes asignar a cada equipo, con su recargo. En Inventario, al editar un equipo, eliges en cuántas cuotas se paga; el cliente no lo elige.</p>
     <div id="planes" class="planes">${allPlans().map(n=>planRow(n, r2(c.plans[n]*100))).join('')}</div>
     <div><button class="btn sm" data-act="planadd">+ Agregar plan</button></div>`:''}
     <div class="err" id="c-err"></div>
@@ -1845,7 +1832,7 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('change', async e=>{
   const t = e.target;
-  if(t.closest && t.closest('#prodf') && t.type==='checkbox') prodSim();
+  if(t.closest && t.closest('#prodf') && (t.type==='checkbox' || t.tagName==='SELECT')) prodSim();
   if(t.dataset.e && S.enc){ S.enc[t.dataset.e] = t.value; if(t.type==='radio') render(); return; }
   if(t.dataset.k){ const o = S.route.v==='trabaja' ? S.post : kycInit(me()); if(o){ o[t.dataset.k] = t.type==='checkbox' ? t.checked : t.value; if(t.tagName==='SELECT' || t.type==='checkbox' || t.type==='date' || t.type==='radio') render(); } return; }
   if(t.dataset.q && S.post){ S.post.r[t.dataset.q] = t.value; if(t.type==='radio') render(); return; }
