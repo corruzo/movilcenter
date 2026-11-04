@@ -157,7 +157,8 @@ function mapStore(t){
 function mapProduct(p){
   return { id:p.id, store:p.tienda_id||1, brand:p.marca, name:p.nombre, cat:p.categoria, shape:p.forma, price:+p.precio, stock:p.stock,
     colors:(p.colores && p.colores.length ? p.colores : [{n:'Único', hex:'#777'}]), storages:(p.capacidades && p.capacidades.length ? p.capacidades : null),
-    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo, fin:p.financiable!==false };
+    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo, fin:p.financiable!==false,
+    ini:p.inicial_min!=null?+p.inicial_min:null, plans:Array.isArray(p.planes)&&p.planes.length?p.planes.map(Number):null };
 }
 function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
   verif:u.verificacion || (u.rol==='admin'?'verificado':'incompleto'), verifNota:u.verificacion_nota||'', nac:u.fecha_nacimiento||'', estadoVzla:u.estado_vzla||'', ocup:u.ocupacion||'', trabajo:u.lugar_trabajo||'',
@@ -274,7 +275,15 @@ const BADGE = {'Pendiente de pago':'warn','Pago en revisión':'warn','Crédito e
   'Activo':'info','En mora':'bad','Liquidado':'ok','En evaluación':'warn','Rechazado':'bad', pendiente:'warn', verificado:'ok', aprobado:'ok', rechazado:'bad'};
 const LABEL = {pendiente:'Por verificar', verificado:'Verificado', aprobado:'Aprobado', rechazado:'Rechazado'};
 const tag = s => `<span class="tag ${BADGE[s]||''}">${esc(LABEL[s]||s)}</span>`;
-const finCuota = (price, n=6) => r2(price*(1-S.cfg.inicialMin)*(1+(S.cfg.plans[n]??0))/n);
+const finCuota = (price, n=6, ini=S.cfg.inicialMin) => r2(price*(1-ini)*(1+(S.cfg.plans[n]??0))/n);
+const allPlans = () => Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
+// inicial y cuotas propias de cada equipo (si el admin no las fijó, se usan las generales)
+const pIni = p => p.ini ?? S.cfg.inicialMin;
+const pPlans = p => { const all = allPlans(); return p.plans ? all.filter(n=>p.plans.includes(n)) : all; };
+const pShowPlan = p => { const ps = pPlans(p); return ps.includes(6) ? 6 : ps[ps.length-1]; };
+// para un pedido con varios equipos: la inicial más alta y las cuotas que todos permiten
+const cartFin = items => { const ps = items.map(i=>P(i.pid)).filter(Boolean);
+  return { ini: Math.max(S.cfg.inicialMin, ...ps.map(pIni)), plans: allPlans().filter(n=>ps.every(p=>pPlans(p).includes(n))) }; };
 const midPlan = () => { const ks = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b); return ks.includes(6) ? 6 : ks[Math.floor(ks.length/2)]; };
 function historial(uid){
   const ords = S.orders.filter(o=>o.userId===uid && o.st!=='cancelado');
@@ -295,7 +304,7 @@ const storeChip = id => { const t = ST(id); return `<span class="stchip">${store
 const richTxt = s => esc(s).replace(/&lt;br\s*\/?&gt;/gi,'<br>').replace(/&lt;(\/?)em&gt;/gi,'<$1em>');
 
 function pcard(p){
-  const out = p.stock<=0; const n = midPlan();
+  const out = p.stock<=0; const n = pShowPlan(p);
   const opts = p.colors.length>1 || p.storages;
   return `<article class="pc">
     <button class="ph" data-act="pd" data-id="${p.id}" aria-label="Ver ${esc(p.name)}">${img(p)}${out?'<span class="tag">Agotado</span>':p.fin?'<span class="tag ok">Contado o cuotas</span>':'<span class="tag dark">Solo contado</span>'}</button>
@@ -304,7 +313,7 @@ function pcard(p){
       <button class="nm" data-act="pd" data-id="${p.id}">${esc(p.name)}${p.storages?` ${esc(p.storages[0].n)}`:''}</button>
       <span class="sp">${esc(Object.values(p.specs).slice(0,2).join(' · '))}</span>
       <span class="pr num">${usd(p.price)}</span>
-      ${!ST(p.store).cuotas?'<span class="sp">Pago de contado</span>':p.fin&&p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n))}</span>`:p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
+      ${!ST(p.store).cuotas?'<span class="sp">Pago de contado</span>':p.fin&&p.price>=S.cfg.minFin?`<span class="cuo">o ${n} cuotas de ${usd(finCuota(p.price, n, pIni(p)))}</span>`:p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
       ${!out && p.stock<=5?`<span class="stk">${p.stock===1?'Última unidad':`Últimas ${p.stock} unidades`}</span>`:''}
       <button class="btn ${out?'':'buy'}" ${out?'disabled':''} data-act="${opts?'pd':'add'}" data-id="${p.id}">${out?'Sin existencia':opts?'Ver opciones':'Agregar al carrito'}</button>
     </div></article>`;
@@ -582,9 +591,9 @@ function vProducto(){
       </div>
       <div class="row"><button class="btn buy" style="flex:1" ${out?'disabled':''} data-act="add" data-id="${p.id}">Agregar al carrito</button><button class="btn brand" style="flex:1" ${out?'disabled':''} data-act="buynow" data-id="${p.id}">Comprar ahora</button></div>
       ${out?`<div class="note warn"><b>Está agotado.</b> Puedes encargarlo y ${esc(ST(p.store).name)} te avisa por WhatsApp cuando llegue. <div style="margin-top:8px"><button class="btn sm brand" data-act="encargar" data-id="${p.id}">Encargar este equipo</button></div></div>`:''}
-      ${p.fin&&price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*S.cfg.inicialMin))}</div>
+      ${p.fin&&price>=S.cfg.minFin?`<div class="finbox"><div class="h">Llévalo financiado · inicial desde ${usd(r2(price*pIni(p)))} (${Math.round(pIni(p)*100)}%)</div>
         <table class="t"><thead><tr><th>Plan</th><th class="r">Cuota mensual</th><th class="r">Total a pagar</th></tr></thead><tbody>
-        ${Object.keys(S.cfg.plans).map(n=>{const fin=r2(price*(1-S.cfg.inicialMin)*(1+S.cfg.plans[n]));return `<tr><td>${n} cuotas</td><td class="r num"><b>${usd(r2(fin/n))}</b></td><td class="r num muted">${usd(r2(fin+price*S.cfg.inicialMin))}</td></tr>`}).join('')}
+        ${pPlans(p).map(n=>{const fin=r2(price*(1-pIni(p))*(1+S.cfg.plans[n]));return `<tr><td>${n} cuotas</td><td class="r num"><b>${usd(r2(fin/n))}</b></td><td class="r num muted">${usd(r2(fin+price*pIni(p)))}</td></tr>`}).join('')}
         </tbody></table></div>`:p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
       ${wa?`<a class="link wa" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Preguntar por WhatsApp</a>`:''}
     </div>
@@ -609,7 +618,8 @@ function vCarrito(){
         <div class="pr num" style="margin:0;font-size:18px">${usd(i.unit*i.qty)}</div></div>`; };
   const finNote = (items, t) => { if(!ST(P(items[0].pid).store).cuotas) return `<div class="note small">${esc(ST(P(items[0].pid).store).name)} vende de contado: pagas el total y te lo llevas.</div>`; const nf = items.filter(i=>!P(i.pid).fin);
     return nf.length ? `<div class="note small">${nf.map(i=>esc(i.name)).join(', ')} ${nf.length>1?'se venden':'se vende'} solo de contado. Para pagar en cuotas, quítalo de este pedido.</div>`
-      : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*S.cfg.inicialMin))}.</div>`
+      : !cartFin(items).plans.length ? `<div class="note small">Estos equipos no tienen un plan de cuotas en común. Para pagar en cuotas, cómpralos en pedidos separados.</div>`
+      : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*cartFin(items).ini))}, en ${cartFin(items).plans.join(', ').replace(/, (\d+)$/,' o $1')} cuotas.</div>`
       : `<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más de esta tienda para poder pagar en cuotas.</div>`; };
   return `<h1 style="margin-bottom:6px">Carrito de compras</h1>
   ${groups.length>1?`<p class="muted" style="margin-bottom:16px">Tienes productos de ${groups.length} tiendas. Cada tienda se paga y se despacha por separado, así que harás un pedido por tienda.</p>`:'<div style="height:12px"></div>'}
@@ -643,7 +653,10 @@ function vCheckout(){
   const co = S.co, k = coCalc();
   const items = cartOf(co.store), tS = ST(co.store);
   const noFin = items.filter(i=>!P(i.pid).fin);
-  const canFin = tS.cuotas && k.base >= S.cfg.minFin && !noFin.length;
+  const cf = cartFin(items);
+  const canFin = tS.cuotas && k.base >= S.cfg.minFin && !noFin.length && cf.plans.length > 0;
+  if(co.ini < cf.ini) co.ini = cf.ini;
+  if(cf.plans.length && !cf.plans.includes(co.n)) co.n = cf.plans.includes(6) ? 6 : cf.plans[cf.plans.length-1];
   if(!canFin) co.mode='contado';
   co.when = (co.method==='efectivo' || co.later) ? 'despues' : 'ahora';
   if(co.method==='efectivo') co.ship='retiro';
@@ -653,11 +666,11 @@ function vCheckout(){
   if(el && needV){ el.ok = false; }
   const cur = METODOS[co.method].cur;
   const hoyCur = cur==='Bs' ? bs(r2(k.hoy*S.cfg.tasa)) : usd(k.hoy);
-  const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
+  const plans = cf.plans.length ? cf.plans : allPlans();
   const down = r2(k.base*co.ini);
   const cuotaDe = n => r2(r2((k.base-down)*(1+S.cfg.plans[n]))/n);
   const nMax = plans[plans.length-1];
-  const minCuota = canFin ? r2(r2((k.base-r2(k.base*S.cfg.inicialMin))*(1+S.cfg.plans[nMax]))/nMax) : 0;
+  const minCuota = canFin ? r2(r2((k.base-r2(k.base*cf.ini))*(1+S.cfg.plans[nMax]))/nMax) : 0;
   const short = {pago_movil:'Pago móvil', transferencia:'Transferencia', zelle:'Zelle', efectivo:'Efectivo'};
   const payTxt = (tS.pay||{})[co.method] || '';
   return `<div class="crumbs"><button data-act="go" data-v="carrito">Carrito</button>›<span>Finalizar compra</span></div>
@@ -678,11 +691,11 @@ function vCheckout(){
     <section class="box"><h2><span class="stepn">2</span>Forma de pago</h2>
       <div class="seg seg2">
         <label class="so"><input type="radio" name="mode" value="contado" data-on="mode" ${!fin?'checked':''}><span class="ot">De contado</span><span class="os">${usd(k.total)}</span></label>
-        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:!tS.cuotas?`${esc(tS.name)} vende solo de contado`:noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
+        <label class="so ${canFin?'':'dis'}"><input type="radio" name="mode" value="financiado" data-on="mode" ${fin?'checked':''} ${canFin?'':'disabled'}><span class="ot">En cuotas</span><span class="os">${canFin?`desde ${usd(minCuota)} al mes`:!tS.cuotas?`${esc(tS.name)} vende solo de contado`:!cf.plans.length?'Sin plan de cuotas en común':noFin.length?`${esc(noFin[0].name)} es solo de contado`:`Desde ${usd(S.cfg.minFin)} de compra`}</span></label>
       </div>
       ${fin?`
         <div class="seg seg3">${plans.map(n=>`<label class="so"><input type="radio" name="plan" value="${n}" data-on="plan" ${co.n===n?'checked':''}><span class="ot">${n} cuotas</span><span class="os">${usd(cuotaDe(n))} al mes</span></label>`).join('')}</div>
-        <div class="field rng"><label for="co-ini">Inicial: <b id="ini-l">${Math.round(co.ini*100)}% · ${usd(k.down)}</b></label><input id="co-ini" type="range" min="${Math.round(S.cfg.inicialMin*100)}" max="${Math.round(S.cfg.inicialMax*100)}" step="5" value="${Math.round(co.ini*100)}" data-on="ini"></div>
+        <div class="field rng"><label for="co-ini">Inicial: <b id="ini-l">${Math.round(co.ini*100)}% · ${usd(k.down)}</b></label><input id="co-ini" type="range" min="${Math.round(cf.ini*100)}" max="${Math.round(S.cfg.inicialMax*100)}" step="5" value="${Math.round(co.ini*100)}" data-on="ini"></div>
         <p class="muted small">Primera cuota hacia el ${fd(addMonths(S.today,1))}. Si pagas una cuota después de su fecha, se suma ${usd(S.cfg.mora)}. <button class="link small" data-act="toggleplan">${co.showPlan?'Ocultar fechas':'Ver todas las fechas'}</button></p>
         ${co.showPlan?`<div class="tbl"><table class="t"><tbody>${Array.from({length:co.n},(_,i)=>`<tr><td>Cuota ${i+1}</td><td>${fd(addMonths(S.today,i+1))}</td><td class="r num">${usd(i===co.n-1?r2(k.financed-k.cuota*(co.n-1)):k.cuota)}</td></tr>`).join('')}</tbody></table></div>`:''}
         ${needV?`<div class="note warn small">${u.verif==='rechazado'?'Tu verificación fue rechazada. Vuelve a enviar tus documentos para comprar en cuotas.':'Para comprar en cuotas necesitamos verificar tu identidad. Toma unos 2 minutos y luego vuelves aquí.'}<div style="margin-top:8px"><button class="btn sm brand" data-act="goverif">Verificar mi identidad</button></div></div>`
@@ -1009,7 +1022,7 @@ function aInventario(){
     <p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago para cambiarla entre “contado o cuotas” y “solo contado”, o “Editar” para cambiar precio, foto y datos.</p>
     <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Forma de pago</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${list.map(p=>`<tr><td><div class="row" style="gap:10px;flex-wrap:nowrap"><div class="th" style="width:44px;height:44px;flex:none">${img(p)}</div><div><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto en la tienda'}</div>${stCol(p.store)}</div></div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
-      <td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>`:'<span class="tag dark">Solo contado</span>'}</td>
+      <td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>${p.fin?`<div class="muted small" style="margin-top:4px">Inicial ${Math.round(pIni(p)*100)}% · ${pPlans(p).join('/')} cuotas</div>`:''}`:'<span class="tag dark">Solo contado</span>'}</td>
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button> <button class="btn sm brand" data-act="prodedit" data-id="${p.id}">Editar</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Todavía no hay productos. Pulsa “Nuevo producto”.</td></tr>'}
     </tbody></table></div>`;
@@ -1033,7 +1046,9 @@ function productModal(id){
       <div class="field" style="grid-column:1/-1"><label for="pf-des">Descripción</label><textarea id="pf-des" rows="2">${esc(p?.desc||'')}</textarea></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-img">Foto del producto <span class="muted">(fondo blanco o liso)</span></label>
         <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div><input id="pf-img" type="file" accept="image/*" data-on="prodimg"></div></div>
-      ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>`:'<p class="muted small" style="grid-column:1/-1">Esta tienda vende solo de contado.</p>'}
+      ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
+      <div class="field"><label for="pf-ini">Inicial mínima de este equipo (%)</label><input id="pf-ini" inputmode="numeric" data-digits="2" value="${p&&p.ini!=null?Math.round(p.ini*100):''}" placeholder="${Math.round(S.cfg.inicialMin*100)} (general)"><span class="hint">Déjalo vacío para usar la inicial general (${Math.round(S.cfg.inicialMin*100)}%).</span></div>
+      <div class="field"><label>Cuotas permitidas</label><div class="row">${allPlans().map(n=>`<label class="ck small"><input type="checkbox" data-pfplan="${n}" ${!p||!p.plans||p.plans.includes(n)?'checked':''}>${n} cuotas</label>`).join('')}</div></div>`:'<p class="muted small" style="grid-column:1/-1">Esta tienda vende solo de contado.</p>'}
       <label class="ck small"><input type="checkbox" id="pf-act" ${!p||p.active?'checked':''}>Visible en la tienda</label>
       <div class="err" id="pf-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="prodsave">${p?'Guardar cambios':'Crear producto'}</button>`, true);
@@ -1057,7 +1072,17 @@ async function saveProduct(){
   const body = {id:M.id, tienda_id: $('#pf-st') ? +$('#pf-st').value : null, nombre, marca:$('#pf-mar').value.trim(), categoria:$('#pf-cat').value, precio,
     stock: $('#pf-stk') ? +($('#pf-stk').value||0) : undefined, colores: colores.length ? colores : [{n:'Único', hex:'#777777'}], capacidades, specs,
     descripcion:$('#pf-des').value.trim(), imagen_url:imagen, financiable:$('#pf-fin')?$('#pf-fin').checked:false, activo:$('#pf-act').checked};
-  try{ await rpc('guardar_producto', {p: body}); closeModal(); await refresh(); toast(M.id ? 'Producto actualizado.' : 'Producto creado.'); }
+  let finIni = null, finPlans = null;
+  if($('#pf-ini')){
+    const iv = $('#pf-ini').value.trim();
+    if(iv!==''){ const v = +iv; if(!(v>=0 && v<=Math.round(S.cfg.inicialMax*100))){ err.textContent = `La inicial debe estar entre 0% y ${Math.round(S.cfg.inicialMax*100)}%.`; return; } finIni = r2(v/100); }
+    const ch = [...document.querySelectorAll('[data-pfplan]')].filter(x=>x.checked).map(x=>+x.dataset.pfplan);
+    if(body.financiable && !ch.length){ err.textContent = 'Marca al menos un plan de cuotas, o desmarca “Se puede pagar en cuotas”.'; return; }
+    finPlans = ch.length===allPlans().length ? null : ch;
+  }
+  try{ const pid = await rpc('guardar_producto', {p: body});
+    if($('#pf-ini')) await rpc('ajustar_financiamiento', {pid: M.id || pid, p_inicial: finIni, p_planes: finPlans});
+    closeModal(); await refresh(); toast(M.id ? 'Producto actualizado.' : 'Producto creado.'); }
   catch(e){ err.textContent = friendly(e); }
 }
 function aConfig(){
@@ -1153,7 +1178,7 @@ function kycSections(n0){
     </div>
   </section>
   <section class="box"><h2><span class="stepn">${n++}</span>Fotos</h2>
-    <p class="muted small">Desde el teléfono puedes tomar las fotos aquí mismo. Que se vean nítidas, con buena luz y sin reflejos.</p>
+    <p class="muted small">Desde el teléfono puedes tomar las fotos aquí mismo. Que se vean nítidas, con buena luz y sin reflejos. Tus fotos y tu ubicación se guardan de forma privada y no se divulgan.</p>
     ${photoBox('selfie','1. Una foto tuya','Solo tu cara, de frente, sin lentes oscuros ni gorra.','user')}
     ${photoBox('cedula','2. Foto de tu cédula','La parte de adelante, completa y nítida.','environment')}
   </section>`;
@@ -1212,6 +1237,7 @@ function vRegistro(){
         <div class="field" style="grid-column:1/-1"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
         <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
       </div>
+      <div class="priv">${ico('shield')}<p><b>Tus datos quedan privados.</b> Tu cédula y tu teléfono, y si compras en cuotas la foto de tu cédula, tu foto y tu ubicación, se guardan de forma privada y no se divulgan. Solo se usan para verificar tu identidad.</p></div>
       <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}>Acepto los términos de venta y la política de privacidad.</label>
       ${k.err?`<div class="note bad small">${esc(k.err)}</div>`:''}
       <button class="btn buy block" data-act="doregister">${S.busy?'Creando cuenta…':'Crear cuenta'}</button>

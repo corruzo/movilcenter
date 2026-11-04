@@ -17,6 +17,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/05_actualizacion.sql` | Verificación de identidad, módulo “Trabaja con nosotros”, equipos solo de contado y cédula/teléfono solo con números. |
 | `supabase/06_ajustes.sql` | Verificación solo para comprar en cuotas y preguntas de empleo para ventas online. |
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
+| `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/09_encargos.sql` | Encargos: el cliente pide un teléfono que no está en el catálogo o está agotado, a la tienda que elija. |
 | `supabase/07_multitienda.sql` | **Las dos tiendas**: crea Priority One y Papa's Store, separa catálogo, pedidos, créditos y pagos por tienda, y crea los paneles por tienda. |
 
@@ -38,7 +39,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 3. Opcional: si quieres ver productos de ejemplo mientras pruebas, repite con `supabase/02_catalogo.sql`.
 4. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 5. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
-6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql` y `supabase/09_encargos.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
+6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql`, `supabase/09_encargos.sql` y `supabase/10_cuotas_por_equipo.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;
@@ -113,7 +114,7 @@ Más abajo está la **configuración común** a las dos tiendas: tasa del día (
 
 ## Paso 9. Cargar los productos
 
-En **Panel → Inventario → + Nuevo producto**: nombre, marca, categoría, precio, unidades, colores, capacidades (ej. `256 GB, 512 GB +150`), especificaciones, descripción y **foto**. Marca si se puede pagar en cuotas y si está visible. El producto queda en la tienda del admin que lo crea.
+En **Panel → Inventario → + Nuevo producto**: nombre, marca, categoría, precio, unidades, colores, capacidades (ej. `256 GB, 512 GB +150`), especificaciones, descripción y **foto**. Marca si se puede pagar en cuotas y si está visible. Si se paga en cuotas, puedes fijar la **inicial mínima de ese equipo** (por ejemplo 40%) y **en cuántas cuotas** se puede pagar (3, 6 y/o 9). Si dejas la inicial vacía, usa la general de Configuración. El producto queda en la tienda del admin que lo crea.
 
 Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrarlo, desmarca **Visible en la tienda**.
 
