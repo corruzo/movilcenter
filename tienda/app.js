@@ -136,6 +136,8 @@ const siteName = () => S.stores.map(t=>t.name).join(' y ') || 'la tienda';
 // lo que ve el admin: su tienda, o la elegida en el selector si es admin general
 const inAdm = x => { const t = myStore() ?? (S.admStore || null); return t==null || x.store===t; };
 const admStoreId = () => myStore() ?? (S.admStore || null);
+// ¿la tienda del panel vende en cuotas? (Papa's Store no: se ocultan créditos, cuotas y mora)
+const admCuo = () => { const t = admStoreId(); return t==null || ST(t).cuotas; };
 const unitPrice = (p, si=0) => p.price + (p.storages && p.storages[si] ? +p.storages[si].d || 0 : 0);
 
 function loadCart(){ try{ const c = JSON.parse(localStorage.getItem('carrito') || '[]'); return Array.isArray(c) ? c : []; }catch(e){ return []; } }
@@ -878,8 +880,8 @@ function vAdmin(){
   const mora = S.credits.filter(inAdm).filter(c=>c.st==='en_mora');
   const toShip = S.orders.filter(inAdm).filter(o=>['preparando','listo_retiro','pendiente_pago'].includes(o.st));
   const low = S.products.filter(inAdm).filter(p=>p.stock<=5);
-  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['ventas','Ventas',0],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',admUsers().filter(x=>x.verif==='pendiente').length],['encargos','Encargos',S.encs.filter(inAdm).filter(e=>e.estado==='nuevo').length],['postulaciones','Postulaciones',admPosts().filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]];
-  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, ventas:aVentas, inventario:aInventario, clientes:aClientes, encargos:aEncargos, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm] || aResumen;
+  const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['ventas','Ventas',0],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',admCuo()?admUsers().filter(x=>x.verif==='pendiente').length:0],['encargos','Encargos',S.encs.filter(inAdm).filter(e=>e.estado==='nuevo').length],['postulaciones','Postulaciones',admPosts().filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Bitácora',0]].filter(([k])=>k!=='creditos'||admCuo());
+  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, ventas:aVentas, inventario:aInventario, clientes:aClientes, encargos:aEncargos, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm==='creditos'&&!admCuo()?'resumen':S.adm] || aResumen;
   const t = myStore() ? ST(myStore()) : null;
   return `<div class="panel"><nav class="side"><div class="who">${t?`<div class="row" style="gap:8px">${storeMark(t,28)}<b>${esc(t.name)}</b></div>`:'<b>Administración general</b>'}<div class="muted small">${esc(u.name)}</div></div>
     ${isGenAdmin()?`<div class="field" style="margin:4px 0 8px"><label for="adm-st" class="small">Ver tienda</label><select id="adm-st" data-on="admstore"><option value="0">Las dos tiendas</option>${S.stores.map(x=>`<option value="${x.id}" ${S.admStore===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>`:''}
@@ -908,29 +910,34 @@ function aResumen(){
   const soon = S.credits.filter(inAdm).filter(c=>['activo','en_mora'].includes(c.st)).flatMap(c=>c.cuotas.filter(q=>q.status!=='pagada' && days(S.today,q.due)<=7).map(q=>({c,q}))).sort((a,b)=>a.q.due-b.q.due);
   const low = S.products.filter(inAdm).filter(p=>p.stock<=5);
   const short = pend.filter(p=>reportedUSD(p) < p.expected-0.5);
+  const cuo = admCuo();
+  const toShip = S.orders.filter(inAdm).filter(o=>['preparando','listo_retiro'].includes(o.st)), unpaid = S.orders.filter(inAdm).filter(o=>['pendiente_pago','pago_rechazado'].includes(o.st));
+  const alertas = `<section class="box"><h3>Alertas</h3>
+        ${short.map(p=>`<div class="note warn small">${p.code} de ${esc(U(p.userId)?.name||'')}: el monto reportado es menor al esperado por ${usd(r2(p.expected-reportedUSD(p)))}.</div>`).join('')}
+        ${low.map(p=>`<div class="note ${p.stock<=0?'bad':'warn'} small">${esc(p.name)}: ${p.stock<=0?'sin existencia':`quedan ${p.stock} unidades`}.</div>`).join('')}
+        ${!short.length&&!low.length?'<p class="muted">Sin alertas.</p>':''}</section>`;
   return `<div class="row between"><h1>Resumen</h1><button class="btn sm" data-act="cierre">Ejecutar cierre diario ahora</button></div>
     <div class="kpis">
       <div class="kpi ${pend.length?'alert':''}"><div class="l">Comprobantes por verificar</div><div class="v num">${pend.length}</div></div>
-      <div class="kpi ${mora.length?'alert':''}"><div class="l">Créditos en mora</div><div class="v num">${mora.length}</div></div>
-      <div class="kpi"><div class="l">Cuentas por cobrar</div><div class="v num">${usd(cxc)}</div><div class="muted small">incluye ${usd(morasT)} de mora</div></div>
+      ${cuo?`<div class="kpi ${mora.length?'alert':''}"><div class="l">Créditos en mora</div><div class="v num">${mora.length}</div></div>
+      <div class="kpi"><div class="l">Cuentas por cobrar</div><div class="v num">${usd(cxc)}</div><div class="muted small">incluye ${usd(morasT)} de mora</div></div>`
+      :`<div class="kpi ${toShip.length?'alert':''}"><div class="l">Pedidos por entregar</div><div class="v num">${toShip.length}</div></div>
+      <div class="kpi"><div class="l">Pedidos sin pagar</div><div class="v num">${unpaid.length}</div><div class="muted small">se cancelan solos al vencer la reserva</div></div>`}
       <div class="kpi"><div class="l">Cobrado este mes</div><div class="v num">${usd(vals[5])}</div></div>
     </div>
     <div class="chart"><h3 style="margin-bottom:8px">Pagos verificados por mes (USD)</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pagos verificados por mes">${grid}${bars}</svg></div>
-    <div class="two" style="grid-template-columns:1fr 1fr">
+    ${!cuo?alertas:`<div class="two" style="grid-template-columns:1fr 1fr">
       <section class="box"><h3>Cuotas vencidas y por vencer (7 días)</h3>
         ${soon.length?`<div class="tbl"><table class="t"><tbody>${soon.map(({c,q})=>`<tr><td>${esc(U(c.userId)?.name||'')}<div class="muted small">${c.code} · cuota ${q.n}</div></td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(cuotaDue(q))}</td><td>${q.status==='en_revision'?'<span class="tag warn">En revisión</span>':q.due<today?'<span class="tag bad">Vencida</span>':'<span class="tag">Por vencer</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Nada pendiente en los próximos 7 días.</p>'}</section>
-      <section class="box"><h3>Alertas</h3>
-        ${short.map(p=>`<div class="note warn small">${p.code} de ${esc(U(p.userId)?.name||'')}: el monto reportado es menor al esperado por ${usd(r2(p.expected-reportedUSD(p)))}.</div>`).join('')}
-        ${low.map(p=>`<div class="note ${p.stock<=0?'bad':'warn'} small">${esc(p.name)}: ${p.stock<=0?'sin existencia':`quedan ${p.stock} unidades`}.</div>`).join('')}
-        ${!short.length&&!low.length?'<p class="muted">Sin alertas.</p>':''}</section>
-    </div>`;
+      ${alertas}
+    </div>`}`;
 }
 function aPagos(){
   const f = S.admF.pagos;
   const list = S.payments.filter(inAdm).filter(p=>p.status==='pendiente' && (f==='todos'||p.kind===f)).sort((a,b)=>a.created-b.created);
   const recent = S.payments.filter(inAdm).filter(p=>p.status!=='pendiente' && p.reviewedAt).sort((a,b)=>b.reviewedAt-a.reviewedAt).slice(0,8);
   return `<h1>Pagos por verificar</h1>
-    <div class="chips">${[['todos','Todos'],['contado','Contado'],['inicial','Solicitudes de crédito'],['cuota','Cuotas']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="pagos" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
+    ${admCuo()?`<div class="chips">${[['todos','Todos'],['contado','Contado'],['inicial','Solicitudes de crédito'],['cuota','Cuotas']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="pagos" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>`:''}
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pago</th><th>Cliente</th><th>Concepto</th><th>Método</th><th class="r">Esperado</th><th class="r">Reportado</th><th>Recibido</th><th></th></tr></thead><tbody>
     ${list.map(p=>{const diff=r2(reportedUSD(p)-p.expected);return `<tr><td class="nw">${p.code}${stCol(p.store)}</td><td>${esc(U(p.userId)?.name||'')}</td><td>${concept(p)}</td><td>${METODOS[p.method].n}<div class="muted small">${esc(p.bank)} ${esc(p.ref)}</div></td>
       <td class="r num nw">${usd(p.expected)}</td><td class="r num nw">${amtTxt(p)}${diff<-0.5?`<div class="err small">Faltan ${usd(-diff)}</div>`:''}</td><td class="nw">${fdt(p.created)}</td>
@@ -978,6 +985,27 @@ function aVentas(){
     const b2 = `<rect x="${cx+2}" y="${yv(r.nf)}" width="${bw}" height="${H-B-yv(r.nf)}" rx="3" fill="#C9A227"/>${r.nf?`<text x="${cx+bw/2+2}" y="${yv(r.nf)-5}" text-anchor="middle" font-size="11" fill="#151515">${r.nf}</text>`:''}`;
     return b1+b2+`<text x="${cx}" y="${H-10}" text-anchor="middle" font-size="12" fill="#6A6A6A">${r.m.toLocaleDateString('es-VE',{month:'short'})}</text>`; }).join('');
   const list = sales.filter(o=>f==='todas'||o.mode===f);
+  if(!admCuo()){
+    const cb = rows.map((r,i)=>{ const cx = L+gw*i+gw/2, w = Math.min(44, gw-16);
+      return `<rect x="${cx-w/2}" y="${yv(r.nc)}" width="${w}" height="${H-B-yv(r.nc)}" rx="3" fill="#C9A227"/>${r.nc?`<text x="${cx}" y="${yv(r.nc)-5}" text-anchor="middle" font-size="11" fill="#151515">${r.nc}</text>`:''}<text x="${cx}" y="${H-10}" text-anchor="middle" font-size="12" fill="#6A6A6A">${r.m.toLocaleDateString('es-VE',{month:'short'})}</text>`; }).join('');
+    return `<h1>Ventas</h1>
+    <p class="muted small">Cuenta como venta todo pedido con pago verificado (en preparación, enviado, listo para retiro o entregado), según la fecha del pedido.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Ventas este mes</div><div class="v num">${cur.nc}</div><div class="muted small">${diff(cur.nc,prev.nc)}</div></div>
+      <div class="kpi"><div class="l">Total vendido este mes</div><div class="v num">${usd(cur.vc)}</div><div class="muted small">${diff(cur.vc,prev.vc)}</div></div>
+      <div class="kpi"><div class="l">Venta promedio</div><div class="v num">${usd(cur.nc?r2(cur.vc/cur.nc):0)}</div><div class="muted small">por pedido este mes</div></div>
+      <div class="kpi"><div class="l">Vendido en 6 meses</div><div class="v num">${usd(r2(sum(rows,r=>r.vc)))}</div><div class="muted small">${sum(rows,r=>r.nc)} venta${sum(rows,r=>r.nc)===1?'':'s'}</div></div>
+    </div>
+    <div class="chart"><h3 style="margin-bottom:8px">Ventas por mes</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas por mes">${grid}${cb}</svg></div>
+    <div class="tbl"><table class="t"><thead><tr><th>Mes</th><th class="r">Ventas</th><th class="r">Total</th></tr></thead><tbody>
+      ${rows.slice().reverse().map(r=>`<tr><td>${r.m.toLocaleDateString('es-VE',{month:'long',year:'numeric'})}</td><td class="r num">${r.nc}</td><td class="r num"><b>${usd(r.vc)}</b></td></tr>`).join('')}
+    </tbody></table></div>
+    <h2>Detalle de ventas</h2>
+    ${sales.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Método de pago</th><th>Estado</th><th class="r">Total</th></tr></thead><tbody>
+    ${sales.map(o=>`<tr><td class="nw">${o.code}</td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}</td><td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}`).join('<br>')}</td>
+      <td>${METODOS[o.method]?.n||''}</td><td>${tag(o.status)}</td><td class="r num nw">${usd(o.total)}</td></tr>`).join('')}
+    </tbody></table></div>`:'<div class="empty">Todavía no hay ventas.</div>'}`;
+  }
   return `<h1>Ventas</h1>
     <p class="muted small">Cuenta como venta todo pedido con pago verificado o crédito aprobado (en preparación, enviado, listo para retiro o entregado), según la fecha del pedido.</p>
     <div class="kpis">
@@ -1005,7 +1033,7 @@ function aPedidos(){
   return `<h1>Pedidos y envíos</h1>
     <div class="chips">${[['activos','En curso'],['despacho','Por despachar'],['todos','Todos']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="ped" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Entrega</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>
-    ${list.map(o=>`<tr><td class="nw">${o.code}${stCol(o.store)}<div>${o.mode==='financiado'?'<span class="tag warn">Financiada</span>':'<span class="tag dark">Contado</span>'}</div></td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
+    ${list.map(o=>`<tr><td class="nw">${o.code}${stCol(o.store)}${admCuo()?`<div>${o.mode==='financiado'?'<span class="tag warn">Financiada</span>':'<span class="tag dark">Contado</span>'}</div>`:''}</td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
       <td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}${i.color?` <span class="muted small">(${esc(i.color)})</span>`:''}`).join('<br>')}</td>
       <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · guía ${esc(o.tracking)}</div>`:''}</td>
       <td>${tag(o.status)}${o.st==='pendiente_pago'?`<div class="muted small">Vence ${fdt(o.deadline)}</div>`:''}</td><td class="r num nw">${usd(o.total)}</td>
@@ -1019,10 +1047,10 @@ function aInventario(){
   const qty = (pid, sts) => sum(S.orders.filter(o=>sts.includes(o.st)).flatMap(o=>o.items).filter(i=>i.pid===pid),i=>i.qty);
   const list = S.products.filter(inAdm);
   return `<div class="row between"><h1>Inventario</h1><button class="btn buy sm" data-act="prodnew">+ Nuevo producto</button></div>
-    <p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela o el crédito no se aprueba. Pulsa la forma de pago para cambiarla entre “contado o cuotas” y “solo contado”, o “Editar” para cambiar precio, foto y datos.</p>
-    <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th><th>Forma de pago</th><th>Estado</th><th>Ajustar</th></tr></thead><tbody>
+    <p class="muted small">El stock se descuenta al crear el pedido (reserva) y se devuelve si el pedido se cancela${admCuo()?' o el crédito no se aprueba':''}. ${admCuo()?'Pulsa la forma de pago para cambiarla entre “contado o cuotas” y “solo contado”, o “Editar”':'Pulsa “Editar”'} para cambiar precio, foto y datos.</p>
+    <div class="tbl"><table class="t"><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th class="r">Disponible</th><th class="r">Reservado</th><th class="r">Vendido</th>${admCuo()?'<th>Forma de pago</th>':''}<th>Estado</th><th>Ajustar</th></tr></thead><tbody>
     ${list.map(p=>`<tr><td><div class="row" style="gap:10px;flex-wrap:nowrap"><div class="th" style="width:44px;height:44px;flex:none">${img(p)}</div><div><b>${esc(p.name)}</b><div class="muted small">Código ${String(p.id).padStart(4,'0')}${p.active?'':' · oculto en la tienda'}</div>${stCol(p.store)}</div></div></td><td>${esc(p.cat)}</td><td class="r num">${usd(p.price)}</td><td class="r num"><b>${p.stock}</b></td><td class="r num">${qty(p.id,live)}</td><td class="r num">${qty(p.id,done)}</td>
-      <td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>${p.fin?`<div class="muted small" style="margin-top:4px">Inicial ${Math.round(pIni(p)*100)}% · ${pPlans(p).join('/')} cuotas</div>`:''}`:'<span class="tag dark">Solo contado</span>'}</td>
+      ${!admCuo()?'':`<td class="nw">${ST(p.store).cuotas?`<button class="btn sm ${p.fin?'':'brand'}" data-act="finswitch" data-id="${p.id}" data-v="${p.fin?0:1}" title="Cambiar">${p.fin?'Contado o cuotas':'Solo contado'}</button>${p.fin?`<div class="muted small" style="margin-top:4px">Inicial ${Math.round(pIni(p)*100)}% · ${pPlans(p).join('/')} cuotas</div>`:''}`:'<span class="tag dark">Solo contado</span>'}</td>`}
       <td>${p.stock<=0?'<span class="tag bad">Agotado</span>':p.stock<=5?'<span class="tag warn">Stock bajo</span>':'<span class="tag ok">Normal</span>'}</td>
       <td class="nw"><button class="btn sm" data-act="stock" data-id="${p.id}" data-d="-1" aria-label="Restar uno">−1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="1" aria-label="Sumar uno">+1</button> <button class="btn sm" data-act="stock" data-id="${p.id}" data-d="5" aria-label="Sumar cinco">+5</button> <button class="btn sm brand" data-act="prodedit" data-id="${p.id}">Editar</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Todavía no hay productos. Pulsa “Nuevo producto”.</td></tr>'}
     </tbody></table></div>`;
@@ -1048,7 +1076,7 @@ function productModal(id){
         <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div><input id="pf-img" type="file" accept="image/*" data-on="prodimg"></div></div>
       ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
       <div class="field"><label for="pf-ini">Inicial mínima de este equipo (%)</label><input id="pf-ini" inputmode="numeric" data-digits="2" value="${p&&p.ini!=null?Math.round(p.ini*100):''}" placeholder="${Math.round(S.cfg.inicialMin*100)} (general)"><span class="hint">Déjalo vacío para usar la inicial general (${Math.round(S.cfg.inicialMin*100)}%).</span></div>
-      <div class="field"><label>Cuotas permitidas</label><div class="row">${allPlans().map(n=>`<label class="ck small"><input type="checkbox" data-pfplan="${n}" ${!p||!p.plans||p.plans.includes(n)?'checked':''}>${n} cuotas</label>`).join('')}</div></div>`:'<p class="muted small" style="grid-column:1/-1">Esta tienda vende solo de contado.</p>'}
+      <div class="field"><label>Cuotas permitidas</label><div class="row">${allPlans().map(n=>`<label class="ck small"><input type="checkbox" data-pfplan="${n}" ${!p||!p.plans||p.plans.includes(n)?'checked':''}>${n} cuotas</label>`).join('')}</div></div>`:''}
       <label class="ck small"><input type="checkbox" id="pf-act" ${!p||p.active?'checked':''}>Visible en la tienda</label>
       <div class="err" id="pf-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="prodsave">${p?'Guardar cambios':'Crear producto'}</button>`, true);
@@ -1108,18 +1136,18 @@ function aConfig(){
     <div class="fg">${Object.entries(METODOS).map(([k,m])=>`<div class="field"><label for="c-d-${k}">${m.n}</label><input id="c-d-${k}" data-dp="${k}" value="${esc(d[k]||'')}"></div>`).join('')}</div>
     <div class="err" id="tf-err"></div>
     <div><button class="btn brand" type="submit">Guardar datos de la tienda</button></div></form></section>
-  <section class="box"><h2>Configuración común</h2><p class="muted small">Aplica a las dos tiendas: la tasa del día, la mora y los planes de cuotas. Cualquier administrador puede cambiarla y queda registrado en la bitácora.</p>
+  <section class="box"><h2>${admCuo()?'Configuración común':'Tasa del día'}</h2><p class="muted small">${admCuo()?'Aplica a las dos tiendas: la tasa del día, la mora y los planes de cuotas. Cualquier administrador puede cambiarla y queda registrado en la bitácora.':'Es la misma para las dos tiendas. El cambio queda registrado en la bitácora.'}</p>
     <form id="cfgf" class="field" style="gap:16px">
     <div class="fg">
       <div class="field"><label for="c-tasa">Tasa del día (Bs por USD)</label><input id="c-tasa" inputmode="decimal" value="${c.tasa}"><span class="hint">Se usa para convertir pagos en bolívares. Actualízala a diario.</span></div>
-      <div class="field"><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
-      <div class="field"><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
-      <div class="field"><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
-      ${Object.keys(c.plans).map(n=>`<div class="field"><label for="c-p${n}">Recargo plan ${n} cuotas (%)</label><input id="c-p${n}" data-plan="${n}" inputmode="decimal" value="${r2(c.plans[n]*100)}"></div>`).join('')}
-      <div class="field"><label for="c-cupo">Cupo inicial por cliente en cada tienda (USD)</label><input id="c-cupo" inputmode="decimal" value="${c.cupoBase}"></div>
+      <div class="field" ${admCuo()?'':'hidden'}><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
+      <div class="field" ${admCuo()?'':'hidden'}><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
+      <div class="field" ${admCuo()?'':'hidden'}><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
+      ${Object.keys(c.plans).map(n=>`<div class="field" ${admCuo()?'':'hidden'}><label for="c-p${n}">Recargo plan ${n} cuotas (%)</label><input id="c-p${n}" data-plan="${n}" inputmode="decimal" value="${r2(c.plans[n]*100)}"></div>`).join('')}
+      <div class="field" ${admCuo()?'':'hidden'}><label for="c-cupo">Cupo inicial por cliente en cada tienda (USD)</label><input id="c-cupo" inputmode="decimal" value="${c.cupoBase}"></div>
     </div>
     <div class="err" id="c-err"></div>
-    <div><button class="btn brand" type="submit">Guardar configuración común</button></div></form></section>`;
+    <div><button class="btn brand" type="submit">${admCuo()?'Guardar configuración común':'Guardar tasa'}</button></div></form></section>`;
 }
 function aBitacora(){
   const t = admStoreId(); const list = S.audit.filter(a=>t==null || a.store===t);
@@ -1332,8 +1360,19 @@ async function doPostular(){
 
 /* ===================== panel: clientes y postulaciones ===================== */
 function aClientes(){
-  const f = S.admF.cli || 'pendiente';
   const all = admUsers();
+  if(!admCuo()){
+    const list = all.slice().sort((a,b)=>b.created-a.created);
+    return `<h1>Clientes</h1>
+    <p class="muted small">Aquí aparecen los clientes que han comprado en ${esc(ST(admStoreId()).name)}.</p>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Cliente</th><th>Cédula</th><th>Teléfono</th><th>Ciudad</th><th class="r">Pedidos</th><th class="r">Comprado</th><th></th></tr></thead><tbody>
+    ${list.map(u=>{ const os = S.orders.filter(inAdm).filter(o=>o.userId===u.id), vend = os.filter(o=>VENDIDO.includes(o.st));
+      return `<tr><td><b>${esc(u.name)}</b><div class="muted small">${esc(u.email)}</div></td><td class="nw">${esc(u.cedula)}</td><td class="nw">${esc(u.phone)} ${u.phone?`<a class="link small" href="https://wa.me/${waNum(u.phone)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</td>
+      <td>${esc(u.city||'—')}</td><td class="r num">${os.length}</td><td class="r num nw">${usd(r2(sum(vend,o=>o.total)))}</td>
+      <td class="nw"><button class="btn sm" data-act="edo" data-u="${u.id}">Ver compras</button></td></tr>`; }).join('')}
+    </tbody></table></div>`:'<div class="empty">Todavía no hay clientes.</div>'}`;
+  }
+  const f = S.admF.cli || 'pendiente';
   const list = all.filter(u=>f==='todos'||u.verif===f).sort((a,b)=>b.created-a.created);
   const cnt = v => all.filter(u=>u.verif===v).length;
   return `<h1>Clientes</h1>
@@ -1349,6 +1388,7 @@ function clienteModal(uid){
   const u = U(uid); if(!u) return; M = {type:'cliente', uid};
   const e = edad(u.nac), map = u.lat!=null ? `https://www.google.com/maps?q=${u.lat},${u.lng}` : '';
   const ingreso = (INGRESOS.find(x=>x[0]===u.ingreso)||[])[1] || '—';
+  if(!admCuo()) return estadoCuenta(uid);
   modal(`Cliente · ${esc(u.name)}`, `
     <div class="row between">${verifTag(u.verif)}<span class="muted small">Registrado el ${fd(u.created)}</span></div>
     ${u.verifNota?`<div class="note small">${esc(u.verifNota)}</div>`:''}
@@ -1421,16 +1461,16 @@ function aEncargos(){
   return `<h1>Encargos</h1>
     <p class="muted small">Teléfonos que los clientes pidieron y no están en el catálogo o están agotados. Escríbeles por WhatsApp con el precio y la fecha, y ve cambiando el estado.</p>
     <div class="chips">${[['activos','En proceso'],['nuevo','Nuevos'],['en_camino','En camino'],['entregado','Entregados'],['todos','Todos']].map(([k,l])=>`<button class="chip" data-act="admf" data-g="enc" data-v="${k}" aria-pressed="${f===k}">${l}</button>`).join('')}</div>
-    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Encargo</th><th>Cliente</th><th>Equipo</th><th>Pago</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Encargo</th><th>Cliente</th><th>Equipo</th>${admCuo()?'<th>Pago</th>':''}<th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>
     ${list.map(e=>{const [l,c]=ENCEST[e.estado]||['',''];return `<tr><td class="nw">${e.codigo}${stCol(e.store)}</td><td><b>${esc(e.nombre)}</b><div class="muted small">${esc(e.telefono)}${e.ciudad?' · '+esc(e.ciudad):''}</div></td>
       <td><b>${esc([e.marca,e.modelo].filter(Boolean).join(' '))}</b><div class="muted small">${esc([e.capacidad,e.color].filter(Boolean).join(' · '))}${e.presupuesto?` · hasta ${usd(e.presupuesto)}`:''}</div>${e.notas?`<div class="small">${esc(e.notas)}</div>`:''}${e.nota?`<div class="muted small">Nota: ${esc(e.nota)}</div>`:''}</td>
-      <td>${e.pago==='cuotas'?'<span class="tag warn">Cuotas</span>':'<span class="tag dark">Contado</span>'}</td><td class="nw">${fd(e.creado)}</td><td><span class="tag ${c}">${l}</span></td>
+      ${admCuo()?`<td>${e.pago==='cuotas'?'<span class="tag warn">Cuotas</span>':'<span class="tag dark">Contado</span>'}</td>`:''}<td class="nw">${fd(e.creado)}</td><td><span class="tag ${c}">${l}</span></td>
       <td class="nw"><a class="btn sm" href="https://wa.me/${waNum(e.telefono)}?text=${encodeURIComponent(`Hola ${e.nombre.split(' ')[0]}, te escribimos de ${ST(e.store).name} por tu encargo ${e.codigo} (${[e.marca,e.modelo].filter(Boolean).join(' ')}).`)}" target="_blank" rel="noopener">WhatsApp</a> <button class="btn sm brand" data-act="encedit" data-id="${e.id}">Estado</button></td></tr>`}).join('')}
     </tbody></table></div>`:'<div class="empty">No hay encargos en este filtro.</div>'}`;
 }
 function encModal(id){
   const e = S.encs.find(x=>x.id===id); M = {type:'enc', id};
-  modal(`Encargo ${e.codigo}`, `<dl class="dl"><dt>Cliente</dt><dd>${esc(e.nombre)} · ${esc(e.telefono)}</dd><dt>Equipo</dt><dd>${esc([e.marca,e.modelo,e.capacidad,e.color].filter(Boolean).join(' · '))}</dd><dt>Pago</dt><dd>${e.pago==='cuotas'?'En cuotas':'De contado'}${e.presupuesto?` · presupuesto ${usd(e.presupuesto)}`:''}</dd>${e.notas?`<dt>Notas</dt><dd>${esc(e.notas)}</dd>`:''}</dl>
+  modal(`Encargo ${e.codigo}`, `<dl class="dl"><dt>Cliente</dt><dd>${esc(e.nombre)} · ${esc(e.telefono)}</dd><dt>Equipo</dt><dd>${esc([e.marca,e.modelo,e.capacidad,e.color].filter(Boolean).join(' · '))}</dd>${ST(e.store).cuotas?`<dt>Pago</dt><dd>${e.pago==='cuotas'?'En cuotas':'De contado'}${e.presupuesto?` · presupuesto ${usd(e.presupuesto)}`:''}</dd>`:e.presupuesto?`<dt>Presupuesto</dt><dd>${usd(e.presupuesto)}</dd>`:''}${e.notas?`<dt>Notas</dt><dd>${esc(e.notas)}</dd>`:''}</dl>
     <div class="fg"><div class="field"><label for="en-est">Estado</label><select id="en-est">${Object.entries(ENCEST).map(([k,[l]])=>`<option value="${k}" ${e.estado===k?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label for="en-nota">Nota interna</label><input id="en-nota" value="${esc(e.nota||'')}" placeholder="Ej. cotizado en $1.250, llega el 20"></div></div>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn brand" data-act="encsave">Guardar</button>`);
@@ -1524,6 +1564,12 @@ function shipModal(oid){
 function estadoCuenta(uid){
   const u = U(uid) || {}, h = historial(uid);
   const cr = S.credits.filter(c=>c.userId===uid); const pays = S.payments.filter(p=>p.userId===uid);
+  if(isAdmin() && !admCuo()){ const os = S.orders.filter(inAdm).filter(o=>o.userId===uid);
+    return modal(`Compras · ${esc(u.name)}`, `
+    <div class="muted small">${esc(u.cedula)} · ${esc(u.email)} · ${esc(u.phone)} · cliente desde ${fd(u.created)}</div>
+    <div class="kpis"><div class="kpi"><div class="l">Pagado en total</div><div class="v num" style="font-size:19px">${usd(h.vol)}</div></div><div class="kpi"><div class="l">Pedidos</div><div class="v num" style="font-size:19px">${os.length}</div></div></div>
+    <h3>Pedidos</h3>${os.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Productos</th><th>Estado</th><th class="r">Total</th></tr></thead><tbody>${os.map(o=>`<tr><td class="nw">${o.code}</td><td class="nw">${fd(o.created)}</td><td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}`).join('<br>')}</td><td>${tag(o.status)}</td><td class="r num nw">${usd(o.total)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Sin pedidos.</p>'}
+    <h3>Pagos</h3>${pays.length?`<div class="tbl"><table class="t"><thead><tr><th>Fecha</th><th>Concepto</th><th>Estado</th><th class="r">Monto</th></tr></thead><tbody>${pays.map(p=>`<tr><td class="nw">${fd(p.created)}</td><td>${concept(p)}</td><td>${tag(p.status)}</td><td class="r num nw">${amtTxt(p)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Sin pagos.</p>'}`, '', true); }
   modal(`Estado de cuenta · ${esc(u.name)}`, `
     <div class="muted small">${esc(u.cedula)} · ${esc(u.email)} · ${esc(u.phone)} · cliente desde ${fd(u.created)}</div>
     <div class="kpis"><div class="kpi"><div class="l">Pagado en total</div><div class="v num" style="font-size:19px">${usd(h.vol)}</div></div><div class="kpi ${h.enMora?'alert':''}"><div class="l">Deuda</div><div class="v num" style="font-size:19px">${usd(h.deuda)}</div></div>
