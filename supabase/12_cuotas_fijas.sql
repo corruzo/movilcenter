@@ -70,5 +70,5 @@ revoke execute on function public._planes_config() from public, anon, authentica
 
 -- frases de portada de Priority One: confianza, sin plazos
 update public.tiendas
-   set frases = '[{"k":"Priority One","t":"Compra con<br><em>confianza.</em>","p":"Equipos nuevos y sellados, con garantía y atención directa por WhatsApp."},{"k":"Priority One","t":"Una tienda<br><em>que responde.</em>","p":"Te acompañamos antes y después de la compra, y cada pago queda registrado en tu cuenta."}]'::jsonb
+   set frases = '[{"k":"Priority One","t":"Compra con<br><em>confianza.</em>","p":"Garantía en cada equipo y atención directa por WhatsApp, antes y después de la compra."},{"k":"Priority One","t":"Una tienda<br><em>que responde.</em>","p":"Cada pago queda registrado en tu cuenta y siempre sabes cuánto te falta."}]'::jsonb
  where id = 1;

@@ -399,7 +399,7 @@ function storyHTML(){
         </div>
         <div class="layers" id="layers">
           <div class="lay l-back"><span class="lbl">Equipos originales</span></div>
-          <div class="lay l-bat" data-t="Tienda confiable"><span class="lbl">Equipos nuevos y sellados</span></div>
+          <div class="lay l-bat" data-t="Tienda confiable"><span class="lbl">Atención por WhatsApp</span></div>
           <div class="lay l-board"><span class="lbl">Inicial desde ${iniPct}%</span></div>
           <div class="lay l-frame"><span class="lbl">Garantía en cada equipo</span></div>
           <div class="lay l-screen" data-t="Contado o cuotas"><span class="lbl">Envíos a todo el país</span></div>
@@ -425,7 +425,7 @@ function jobCard(inTrabaja){
 }
 function vInicio(){
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b), iniPct = Math.round(S.cfg.inicialMin*100);
-  const tick = [`Tienda <b>100% online</b>`, `Contado <b>o</b> cuotas`, `Inicial desde <b>${iniPct}%</b>`, `Tienda <b>confiable</b>`, `Equipos <b>sellados</b>`, `Envíos a <b>todo el país</b>`];
+  const tick = [`Tienda <b>100% online</b>`, `Contado <b>o</b> cuotas`, `Inicial desde <b>${iniPct}%</b>`, `Tienda <b>confiable</b>`, `Envíos a <b>todo el país</b>`];
   const hf = S.homeFin || '';
   const feat = S.products.filter(p=>p.stock>0 && (!hf || (hf==='si')===p.fin)).sort((a,b)=>(a.cat==='Teléfonos'?0:1)-(b.cat==='Teléfonos'?0:1)).slice(0,8);
   const cnt = f => S.products.filter(p=>!f || (f==='si')===p.fin).length;
@@ -605,7 +605,7 @@ function vProducto(){
   </section>
   <div class="two" style="grid-template-columns:1fr 1fr">
     <section class="box"><h2>Especificaciones</h2><table class="spec">${Object.entries(p.specs).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></section>
-    <section class="box"><h2>Descripción</h2><p>${esc(p.desc)}</p><div class="note">El equipo se entrega sellado y se revisa contigo al momento de la entrega.</div></section>
+    <section class="box"><h2>Descripción</h2><p>${esc(p.desc)}</p><div class="note">El equipo se revisa contigo al momento de la entrega.</div></section>
   </div>
   ${rel.length?`<section class="sec" style="margin-top:28px"><h2>También te puede interesar</h2><div class="pgrid">${rel.map(pcard).join('')}</div></section>`:''}`;
 }
@@ -1434,7 +1434,7 @@ function vEncargo(){
       <div class="field"><label for="e-color">Color <span class="muted">(opcional)</span></label><input id="e-color" data-e="color" value="${esc(E.color)}" placeholder="Ej. Titanio natural"></div>
       <div class="field"><label>¿Cómo lo pagarías?</label><div class="seg seg2">${[['contado','De contado'],['cuotas','En cuotas']].map(([v,l])=>`<label class="so ${v==='cuotas'&&!tS.cuotas?'dis':''}"><input type="radio" name="e-pago" value="${v}" data-e="pago" ${E.pago===v?'checked':''} ${v==='cuotas'&&!tS.cuotas?'disabled':''}><span class="ot">${l}</span>${v==='cuotas'&&!tS.cuotas?`<span class="os">${esc(tS.name)} vende de contado</span>`:''}</label>`).join('')}</div></div>
       <div class="field"><label for="e-pres">Presupuesto aproximado en USD <span class="muted">(opcional)</span></label><input id="e-pres" data-e="presupuesto" inputmode="numeric" data-digits="5" value="${esc(E.presupuesto)}"></div>
-      <div class="field" style="grid-column:1/-1"><label for="e-notas">Algo más que debamos saber <span class="muted">(opcional)</span></label><textarea id="e-notas" data-e="notas" rows="2" placeholder="Ej. lo necesito antes del 15, nuevo y sellado">${esc(E.notas)}</textarea></div>
+      <div class="field" style="grid-column:1/-1"><label for="e-notas">Algo más que debamos saber <span class="muted">(opcional)</span></label><textarea id="e-notas" data-e="notas" rows="2" placeholder="Ej. lo necesito antes del 15">${esc(E.notas)}</textarea></div>
     </div></section>
     <section class="box"><h2><span class="stepn">3</span>Tus datos</h2><div class="fg">
       <div class="field" style="grid-column:1/-1"><label for="e-nom">Nombre y apellido</label><input id="e-nom" data-e="nombre" value="${esc(E.nombre)}" autocomplete="name"></div>
