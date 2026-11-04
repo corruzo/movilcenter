@@ -601,3 +601,23 @@ nav.cats button.stb{color:var(--gold-l)}
 .priv svg{color:var(--brand-2);margin-top:2px}
 .priv p{font-size:13.5px;color:var(--ink);line-height:1.45}
 .priv b{color:var(--brand-2)}
+
+/* ---- planes de cuotas editables ---- */
+.planes{display:grid;gap:10px}
+.planrow{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;max-width:520px}
+/* ---- postulaciones ---- */
+.posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.postc{background:#fff;border:1px solid var(--line,#E3E2DF);border-radius:12px;padding:16px;display:grid;gap:10px;align-content:start}
+.postc .pc-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.postc .pc-h b{font-size:16px}
+.postc .pc-d{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:#3a3a3a}
+.postc .pc-d span{display:inline-flex;align-items:center;gap:5px}
+.postc .pc-d svg{width:15px;height:15px}
+.postc .pc-t{display:flex;flex-wrap:wrap;gap:6px}
+.postc .pc-f{display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--line,#E3E2DF);padding-top:10px}
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px}
+.pgrid div,.qa div{display:grid;gap:3px}
+.pgrid span,.qa span{font-size:13px;color:var(--muted,#6A6A6A)}
+.qa{display:grid;gap:14px}
+.qa p{margin:0;font-weight:500}
+@media (max-width:560px){.pgrid{grid-template-columns:1fr}.planrow{grid-template-columns:1fr 1fr}.planrow .btn{grid-column:1/-1}}
