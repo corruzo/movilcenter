@@ -11,6 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11 y 12) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -37,11 +38,12 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 ## Paso 2. Crear la base de datos
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
-2. Abre `supabase/01_esquema.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success*.
-3. Opcional: si quieres ver productos de ejemplo mientras pruebas, repite con `supabase/02_catalogo.sql`.
-4. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
-5. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
-6. Por último ejecuta, en este orden, `supabase/05_actualizacion.sql`, `supabase/06_ajustes.sql`, `supabase/07_multitienda.sql`, `supabase/08_formas_de_pago.sql`, `supabase/09_encargos.sql`, `supabase/10_cuotas_por_equipo.sql`, `supabase/11_online_y_planes.sql` y `supabase/12_cuotas_fijas.sql`. Si ya habías ejecutado los anteriores, ejecuta solo los que falten.
+2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
+   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11 y 12. Se pueden ejecutar más de una vez sin dañar nada.)
+3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
+4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
+
+No ejecutes `02_catalogo.sql` en la tienda real: son productos de ejemplo.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;
@@ -103,20 +105,20 @@ update public.perfiles set rol = 'admin', tienda_id = null, verificacion = 'veri
 
 3. Cierran sesión y vuelven a entrar. Verán el botón **Panel**.
 
-Cada admin **solo ve y gestiona su tienda**: sus pagos, pedidos, créditos, productos, clientes que le compraron, postulaciones dirigidas a su tienda y su bitácora. El admin general ve las dos y tiene un selector para filtrar por tienda.
+Cada admin **solo ve y gestiona su tienda**: sus pagos, pedidos, créditos, productos, clientes que le compraron, postulaciones dirigidas a su tienda y su historial de cambios. El admin general ve las dos y tiene un selector para filtrar por tienda.
 
 ## Paso 8. Configurar cada tienda desde su panel
 
 En **Panel → Configuración**, cada admin completa los **datos de su tienda**:
-- Logo (PNG con fondo transparente), nombre, eslogan, WhatsApp, correo, RIF, horario y dirección de retiro.
+- Logo (PNG con fondo transparente), nombre, eslogan, WhatsApp, correo, RIF y horario de atención.
 - Las **2 frases de la portada** que aparecen junto al teléfono animado.
-- Sus **datos para recibir pagos** (pago móvil, transferencia, Zelle, efectivo). Son los que ve el cliente al pagarle a esa tienda.
+- Sus **datos para recibir pagos** (pago móvil, transferencia y Zelle). Son los que ve el cliente al pagarle a esa tienda.
 
-Más abajo está la **configuración común** a las dos tiendas: tasa del día (actualízala cada día), mora, inicial mínima, recargo de cada plan y cupo inicial.
+Más abajo está la **configuración común**: tasa del día (actualízala cada día), mora, inicial mínima, cupo inicial y las **opciones de cuotas** con su recargo (Papa's Store solo ve la tasa del día).
 
 ## Paso 9. Cargar los productos
 
-En **Panel → Inventario → + Nuevo producto**: nombre, marca, categoría, precio, unidades, colores, capacidades (ej. `256 GB, 512 GB +150`), especificaciones, descripción y **foto**. Marca si se puede pagar en cuotas y si está visible. Si se paga en cuotas, puedes fijar la **inicial mínima de ese equipo** (por ejemplo 40%) y **en cuántas cuotas** se puede pagar (3, 6 y/o 9). Si dejas la inicial vacía, usa la general de Configuración. El producto queda en la tienda del admin que lo crea.
+En **Panel → Inventario → + Nuevo producto**: nombre, marca, categoría, precio, unidades, colores, capacidades (ej. `256 GB, 512 GB +150`), especificaciones, descripción y **foto**. Marca si se puede pagar en cuotas y si está visible. Si se paga en cuotas, fijas la **inicial mínima de ese equipo** (por ejemplo 40%) y **en cuántas cuotas** se paga. El cliente no elige las cuotas. Si dejas la inicial vacía, usa la general de Configuración. El producto queda en la tienda del admin que lo crea.
 
 Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrarlo, desmarca **Visible en la tienda**.
 
@@ -138,7 +140,8 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
   - en compras de contado, el pedido pasa a preparación;
   - en solicitudes de crédito, se genera el cronograma de cuotas.
 - **Pedidos y envíos:** pulsa **Despachar** y escribe la guía. Después marca **Entregado**.
-- **Créditos y cuotas:** aquí ves las moras. Puedes condonarlas o registrar pagos en efectivo con **Pago en caja**.
+- **Créditos y cuotas:** aquí ves las moras y puedes condonarlas.
+- **Historial de cambios:** registro de lo que hizo cada administrador.
 - El cierre diario corre solo cada noche. También puedes ejecutarlo desde **Resumen**.
 
 ## Plan gratuito: lo que debes saber
