@@ -960,7 +960,7 @@ function cuotaWa(c, q){
   const late = q.due < dayStart(S.today), t = ST(c.store);
   const msg = `Hola ${u.name.split(' ')[0]}, te escribimos de ${t.name}. `
     + (late ? `Tu cuota ${q.n} de ${c.n} (crédito ${c.code}) venció el ${fd(q.due)}${q.mora?` y ya tiene ${usd(q.mora)} de mora`:''}. El monto a pagar es ${usd(cuotaDue(q))}.`
-            : `Te recordamos que tu cuota ${q.n} de ${c.n} (crédito ${c.code}) por ${usd(cuotaDue(q))} vence el ${fd(q.due)}.`)
+            : `Te recordamos que tu cuota ${q.n} de ${c.n} (crédito ${c.code}) por ${usd(cuotaDue(q))} vence el ${fd(q.due)}. Págala antes de esa fecha para evitar el cargo de ${usd(S.cfg.mora)} por mora.`)
     + ` Puedes pagarla y subir el comprobante desde tu cuenta en ${location.host || 'la página'}. ¡Gracias!`;
   return `<a class="btn sm" href="https://wa.me/${waNum(u.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico('chat')} Recordar</a>`;
 }
