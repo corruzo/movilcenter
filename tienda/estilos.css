@@ -621,3 +621,4 @@ nav.cats button.stb{color:var(--gold-l)}
 .qa{display:grid;gap:14px}
 .qa p{margin:0;font-weight:500}
 @media (max-width:560px){.pgrid{grid-template-columns:1fr}.planrow{grid-template-columns:1fr 1fr}.planrow .btn{grid-column:1/-1}}
+img.smark{border-radius:6px}
