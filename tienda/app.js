@@ -336,7 +336,7 @@ function track(o){
     return `<span class="${cls}">${label}</span>`;}).join('')}</div>`;
 }
 function logoHTML(){
-  return `<span class="duo">${S.stores.map(t=>`<span class="duo-i">${storeMark(t,32)}${t.logo?'':`<b>${esc(t.name)}</b>`}</span>`).join('<span class="duo-x" aria-hidden="true">×</span>')}</span>`;
+  return `<span class="duo">${S.stores.map(t=>`<span class="duo-i">${storeMark(t,32)}<b>${esc(t.name)}</b></span>`).join('<span class="duo-x" aria-hidden="true">×</span>')}</span>`;
 }
 
 /* ===================== cabecera / pie ===================== */
