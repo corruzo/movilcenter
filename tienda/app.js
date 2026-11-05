@@ -343,7 +343,7 @@ function logoHTML(){
 function renderChrome(){
   const u = me(); const cnt = sum(S.cart,i=>i.qty);
   const un = u ? S.notifs.filter(n=>!n.read).length : 0;
-  $('#strip').innerHTML = `<span>Envíos a todo el país · Compra de contado o en cuotas</span>${S.cfg?`<span>Tasa del día: <b class="num">${bs(S.cfg.tasa)}</b> por dólar</span>`:''}`;
+  $('#strip').innerHTML = `<span>Envíos a todo el país · ${[...finStores().map(t=>`Cuotas en ${esc(t.name)}`), ...cashStores().map(t=>`Contado en ${esc(t.name)}`)].join(' · ')}</span>${S.cfg?`<span>Tasa del día: <b class="num">${bs(S.cfg.tasa)}</b> por dólar</span>`:''}`;
   $('#hd').innerHTML = `
     <button class="logo" data-act="go" data-v="inicio" aria-label="Inicio: ${esc(siteName())}">${logoHTML()}</button>
     <form class="search" id="searchf" role="search"><input id="q" placeholder="Buscar teléfonos, tablets, accesorios…" value="${esc(S.f.q)}" aria-label="Buscar"><button type="submit" aria-label="Buscar">${ico('search')}</button></form>
@@ -359,7 +359,7 @@ function renderChrome(){
     + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">Todo el catálogo</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
   $('#foot').innerHTML = `<div class="wrap cols">
       <div><div class="logo">${logoHTML()}</div>
-        <p style="margin-top:10px;max-width:34ch">Dos tiendas, una sola cuenta. Teléfonos, tablets y accesorios con garantía, de contado o en cuotas mensuales.</p></div>
+        <p style="margin-top:10px;max-width:34ch">Dos tiendas, una sola cuenta. ${finStores().map(t=>esc(t.name)).join(' y ')} vende en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado.</p></div>
       <div><h4>Ayuda</h4><ul><li><button data-act="go" data-v="financiamiento">Cómo funciona el financiamiento</button></li><li><button data-act="acct" data-v="pedidos">Seguir mi pedido</button></li><li><button data-act="acct" data-v="creditos">Pagar una cuota</button></li><li><button data-act="go" data-v="trabaja">Trabaja con nosotros</button></li></ul></div>
       ${S.stores.map(t=>{ const wa = waLink('Hola, quiero información sobre un equipo.', t.id); return `<div><h4>${esc(t.name)}</h4><ul>
         <li>Tienda online · envíos a todo el país</li>${t.horario?`<li>Atención: ${esc(t.horario)}</li>`:''}
@@ -383,9 +383,9 @@ function storyHTML(){
     <canvas class="dust" id="dust" aria-hidden="true"></canvas>
     <div class="hero-copy" id="hero">
       <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
-      <h1>${['Estrénalo','hoy.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Págalo','en','cuotas.'].map((w,i)=>`<span class="w g" style="animation-delay:${.3+i*.09}s">${w}</span>`).join(' ')}</em></h1>
-      <p>${finStores().length?`En ${finStores().map(t=>esc(t.name)).join(' y ')} pagas una inicial y el resto en cuotas, sin bancos.`:''}${cashStores().length?` En ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado y te lo llevas hoy.`:''} Una sola cuenta para las dos tiendas.</p>
-      <div class="row"><button class="btn buy" data-act="cat" data-v="">Ver equipos →</button>${u?`<button class="btn ghost" data-act="go" data-v="financiamiento">Cómo funcionan las cuotas</button>`:`<button class="btn ghost" data-act="go" data-v="registro">Crear cuenta</button>`}</div>
+      <h1>${['Cuotas','o','contado.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Tú','eliges','la','tienda.'].map((w,i)=>`<span class="w g" style="animation-delay:${.35+i*.09}s">${w}</span>`).join(' ')}</em></h1>
+      <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span>${t.cuotas?'Inicial y el resto en cuotas, sin bancos. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span></div></li>`).join('')}</ul>
+      <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Comprar en cuotas':'Comprar de contado'} →</button>`).join('')}</div>
     </div>
     <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
       <div class="halo" id="halo"></div><div class="rings" id="rings"><i></i><i></i><i></i></div>
@@ -395,20 +395,20 @@ function storyHTML(){
           <div class="f side r"></div><div class="f side l"></div>
           <div class="f back"><div class="cam"><div class="lens a"></div><div class="lens b"></div><div class="lens c"></div><div class="flash"></div></div></div>
           <div class="f front"><div class="screen" id="screen"><div class="isl"></div><div class="time">10:30</div><div class="date">${new Date().toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'})}</div>
-            <div class="offer"><small>Llévalo hoy</small><b class="num">${iniPct}% de inicial</b><span>y el resto en cuotas</span></div><div class="glare"></div></div></div>
+            <div class="offer"><small>${esc(finStores()[0]?.name||'Llévalo hoy')}</small><b class="num">${iniPct}% de inicial</b><span>y el resto en cuotas</span></div><div class="glare"></div></div></div>
         </div>
         <div class="layers" id="layers">
           <div class="lay l-back"><span class="lbl">Equipos originales</span></div>
           <div class="lay l-bat" data-t="Tienda confiable"><span class="lbl">Atención por WhatsApp</span></div>
           <div class="lay l-board"><span class="lbl">Inicial desde ${iniPct}%</span></div>
           <div class="lay l-frame"><span class="lbl">Garantía en cada equipo</span></div>
-          <div class="lay l-screen" data-t="Contado o cuotas"><span class="lbl">Envíos a todo el país</span></div>
+          <div class="lay l-screen" data-t="Cuotas o contado"><span class="lbl">Envíos a todo el país</span></div>
         </div>
       </div>
     </div></div>
     ${says}
-    <div class="say final" data-r="0.80,1.01"><span class="k">Contado o cuotas</span><h2>Dos tiendas,<br><em>una sola cuenta.</em></h2>
-      <p>${S.stores.map(t=>`${t.cuotas?'En cuotas o de contado':'De contado'} en ${esc(t.name)}`).join('; ')}. Con la misma cuenta, y cada tienda te atiende y despacha su pedido.</p>
+    <div class="say final" data-r="0.80,1.01"><span class="k">Priority One · Papa's Store</span><h2>Dos tiendas,<br><em>una sola cuenta.</em></h2>
+      <p>${S.stores.map(t=>`${esc(t.name)}: ${t.cuotas?'en cuotas o de contado':'solo de contado'}`).join('. ')}. Usas la misma cuenta y cada tienda te atiende y despacha su pedido.</p>
       <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">Ver ${esc(t.name)}</button>`).join('')}</div></div>
     <div class="scroll-hint" id="hint"><i></i>Desliza para descubrirlo</div>
     <nav class="progress" id="prog" aria-label="Partes de la presentación"><button data-go="0" aria-label="Inicio"></button><button data-go="0.18" aria-label="Primera tienda"></button><button data-go="0.35" aria-label="Segunda tienda"></button><button data-go="0.56" aria-label="Por dentro"></button><button data-go="0.9" aria-label="Tiendas"></button></nav>
@@ -425,7 +425,7 @@ function jobCard(inTrabaja){
 }
 function vInicio(){
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b), iniPct = Math.round(S.cfg.inicialMin*100);
-  const tick = [`Tienda <b>100% online</b>`, `Contado <b>o</b> cuotas`, `Inicial desde <b>${iniPct}%</b>`, `Tienda <b>confiable</b>`, `Envíos a <b>todo el país</b>`];
+  const tick = [`Tienda <b>100% online</b>`, ...finStores().map(t=>`Cuotas en <b>${esc(t.name)}</b>`), ...cashStores().map(t=>`Contado en <b>${esc(t.name)}</b>`), `Tienda <b>confiable</b>`, `Envíos a <b>todo el país</b>`];
   const hf = S.homeFin || '';
   const feat = S.products.filter(p=>p.stock>0 && (!hf || (hf==='si')===p.fin)).sort((a,b)=>(a.cat==='Teléfonos'?0:1)-(b.cat==='Teléfonos'?0:1)).slice(0,8);
   const cnt = f => S.products.filter(p=>!f || (f==='si')===p.fin).length;

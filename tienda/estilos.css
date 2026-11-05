@@ -622,3 +622,10 @@ nav.cats button.stb{color:var(--gold-l)}
 .qa p{margin:0;font-weight:500}
 @media (max-width:560px){.pgrid{grid-template-columns:1fr}.planrow{grid-template-columns:1fr 1fr}.planrow .btn{grid-column:1/-1}}
 img.smark{border-radius:6px}
+/* portada: una línea por tienda */
+.story .hero-copy .hero-st{list-style:none;margin:18px 0 22px;padding:0;display:grid;gap:12px}
+.story .hero-copy .hero-st li{display:flex;gap:12px;align-items:flex-start}
+.story .hero-copy .hero-st li .smark{margin-top:2px}
+.story .hero-copy .hero-st b{display:block;font-size:16px;color:#fff}
+.story .hero-copy .hero-st span{display:block;font-size:15px;color:#cfcac0;line-height:1.4}
+@media (max-width:760px){.story .hero-copy .hero-st{margin:12px 0 16px;gap:8px}.story .hero-copy .hero-st li{justify-content:center;text-align:center}.story .hero-copy .hero-st li .smark{display:none}.story .hero-copy .hero-st span{font-size:14px}}
