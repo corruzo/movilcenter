@@ -1,6 +1,6 @@
 -- =====================================================================
 --  Priority One y Papa's Store · INSTALACIÓN COMPLETA
---  Contiene, en orden: 01, 05, 06, 07, 08, 09, 10, 11, 12 y 13.
+--  Contiene, en orden: 01, 05, 06, 07, 08, 09, 10, 11, 12, 13 y 14.
 --  Pégalo completo en Supabase > SQL Editor > New query y pulsa Run.
 --  (El cierre diario va aparte: 03_tarea_diaria.sql)
 -- =====================================================================
@@ -2068,3 +2068,30 @@ update public.tiendas
    set eslogan = 'Precio claro, pago de contado.',
        frases = '[{"k":"Papa''s Store · Contado","t":"Pagas de contado,<br><em>sin recargos.</em>","p":"El precio que ves es el que pagas: sin intereses, sin cuotas y sin sorpresas."},{"k":"Papa''s Store","t":"Pagas hoy,<br><em>te lo enviamos.</em>","p":"Paga por pago móvil, transferencia o Zelle y recíbelo en tu casa o por envío nacional."}]'::jsonb
  where id = 2;
+
+-- >>>>>>>>>> 14_sin_zelle.sql
+-- =====================================================================
+--  Actualización 14 · Sin Zelle
+--  Las tiendas cobran solo en bolívares: pago móvil y transferencia.
+--  Ejecutar DESPUÉS de 13_frases.sql. Se puede ejecutar más de una vez.
+-- =====================================================================
+update public.tiendas set datos_pago = coalesce(datos_pago, '{}'::jsonb) - 'zelle' - 'efectivo';
+update public.configuracion set datos_pago = coalesce(datos_pago, '{}'::jsonb) - 'zelle' - 'efectivo' where id = 1;
+
+create or replace function public._solo_online() returns trigger
+language plpgsql as $$
+begin
+  if new.envio_metodo = 'retiro' then raise exception 'Las tiendas son solo online: elige delivery o envío nacional.'; end if;
+  if new.metodo_pago in ('efectivo', 'zelle') then raise exception 'Elige pago móvil o transferencia.'; end if;
+  return new;
+end $$;
+
+-- los comprobantes también: solo pago móvil o transferencia
+create or replace function public._pago_metodo() returns trigger
+language plpgsql as $$
+begin
+  if new.metodo = 'zelle' then raise exception 'Elige pago móvil o transferencia.'; end if;
+  return new;
+end $$;
+drop trigger if exists pago_metodo on public.pagos;
+create trigger pago_metodo before insert on public.pagos for each row execute function public._pago_metodo();

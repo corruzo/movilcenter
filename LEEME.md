@@ -11,7 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12 y 13) para ejecutarlo de una sola vez. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13 y 14) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -20,6 +20,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
 | `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
+| `supabase/14_sin_zelle.sql` | Solo pago móvil y transferencia (sin Zelle). |
 | `supabase/13_frases.sql` | Frases de portada según la forma de pago de cada tienda. |
 | `supabase/12_cuotas_fijas.sql` | El admin fija en cuántas cuotas se paga cada equipo; frases de confianza en la portada. |
 | `supabase/09_encargos.sql` | Encargos: el cliente pide un teléfono que no está en el catálogo o está agotado, a la tienda que elija. |
@@ -40,7 +41,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
 2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
-   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12 y 13. Se pueden ejecutar más de una vez sin dañar nada.)
+   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13 y 14. Se pueden ejecutar más de una vez sin dañar nada.)
 3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
 
@@ -113,7 +114,7 @@ Cada admin **solo ve y gestiona su tienda**: sus pagos, pedidos, créditos, prod
 En **Panel → Configuración**, cada admin completa los **datos de su tienda**:
 - Logo (PNG con fondo transparente), nombre, eslogan, WhatsApp, correo, RIF y horario de atención.
 - Las **2 frases de la portada** que aparecen junto al teléfono animado.
-- Sus **datos para recibir pagos** (pago móvil, transferencia y Zelle). Son los que ve el cliente al pagarle a esa tienda.
+- Sus **datos para recibir pagos** (pago móvil y transferencia). Son los que ve el cliente al pagarle a esa tienda.
 
 Más abajo está la **configuración común**: tasa del día (actualízala cada día), mora, inicial mínima, cupo inicial y las **opciones de cuotas** con su recargo (Papa's Store solo ve la tasa del día).
 

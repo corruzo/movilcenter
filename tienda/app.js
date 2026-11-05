@@ -104,10 +104,9 @@ const CATS = ['Teléfonos','Tablets','Smartwatch','Audio','Accesorios'];
 const catsEnUso = () => CATS.filter(c=>S.products.some(p=>p.active!==false && p.cat===c));
 const METODOS = {
   pago_movil:{n:'Pago móvil', cur:'Bs'}, transferencia:{n:'Transferencia bancaria', cur:'Bs'},
-  zelle:{n:'Zelle', cur:'USD'},
 };
 // pedidos viejos que se pagaron en efectivo
-const metN = k => METODOS[k]?.n || (k==='efectivo' ? 'Efectivo' : k);
+const metN = k => METODOS[k]?.n || ({efectivo:'Efectivo', zelle:'Zelle'})[k] || k;
 const BANKS = ['Banesco','Mercantil','Provincial','Banco de Venezuela','BNC','Bancamiga','Bancaribe','Banco del Tesoro','Banplus','Exterior','Otro'];
 const PED = {pendiente_pago:'Pendiente de pago', pago_en_revision:'Pago en revisión', credito_en_evaluacion:'Crédito en evaluación', pago_rechazado:'Pago rechazado',
   preparando:'Preparando', listo_retiro:'Listo para retiro', enviado:'Enviado', entregado:'Entregado', cancelado:'Cancelado'};
@@ -679,7 +678,7 @@ function vCheckout(){
   const cuotaDe = n => r2(r2((k.base-down)*(1+S.cfg.plans[n]))/n);
   const nMax = plans[plans.length-1];
   const minCuota = canFin ? r2(r2((k.base-r2(k.base*cf.ini))*(1+S.cfg.plans[nMax]))/nMax) : 0;
-  const short = {pago_movil:'Pago móvil', transferencia:'Transferencia', zelle:'Zelle'};
+  const short = {pago_movil:'Pago móvil', transferencia:'Transferencia'};
   const payTxt = (tS.pay||{})[co.method] || '';
   return `<div class="crumbs"><button data-act="go" data-v="carrito">Carrito</button>›<span>Finalizar compra</span></div>
   <div class="row between" style="margin-bottom:18px"><h1>Finalizar compra</h1><span class="row small">Pedido para ${storeChip(co.store)}</span></div>
@@ -710,7 +709,7 @@ function vCheckout(){
     </section>
 
     <section class="box"><h2><span class="stepn">3</span>${fin?'Pago de la inicial':'Pago'}</h2>
-      <div class="seg seg3">${Object.keys(METODOS).map(key=>`<label class="so"><input type="radio" name="met" value="${key}" data-on="method" ${co.method===key?'checked':''}><span class="ot">${short[key]}</span><span class="os">${METODOS[key].cur==='Bs'?'Bolívares':'Dólares'}</span></label>`).join('')}</div>
+      <div class="seg seg2">${Object.keys(METODOS).map(key=>`<label class="so"><input type="radio" name="met" value="${key}" data-on="method" ${co.method===key?'checked':''}><span class="ot">${short[key]}</span><span class="os">${METODOS[key].cur==='Bs'?'Bolívares':'Dólares'}</span></label>`).join('')}</div>
       <div class="bankdata"><span class="muted small">Datos para pagar a ${esc(tS.name)}</span><span>${esc(payTxt)}</span><span>Monto: <b class="num">${hoyCur}</b>${cur==='Bs'?` <span class="muted">(${usd(k.hoy)})</span>`:''}</span></div>
       <label class="ck small"><input type="checkbox" data-on="later" ${co.later?'checked':''}>Pagaré después (guardamos tus productos ${S.cfg.reservaHoras} horas)</label>
       ${co.when==='ahora'?`<div class="fg">
