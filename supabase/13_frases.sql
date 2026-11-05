@@ -6,7 +6,7 @@
 -- =====================================================================
 update public.tiendas
    set eslogan = 'Estrénalo hoy y págalo en cuotas.',
-       frases = '[{"k":"Priority One · Cuotas","t":"Estrénalo hoy,<br><em>págalo en cuotas.</em>","p":"Das una inicial y el resto lo pagas en cuotas fijas cada mes."},{"k":"Priority One","t":"Compra con<br><em>confianza.</em>","p":"Garantía en cada equipo y atención directa por WhatsApp, antes y después de la compra."}]'::jsonb
+       frases = '[{"k":"Priority One · Cuotas","t":"Estrénalo hoy,<br><em>págalo en cuotas.</em>","p":"Das una inicial y el resto lo pagas en cuotas."},{"k":"Priority One","t":"Compra con<br><em>confianza.</em>","p":"Garantía en cada equipo y atención directa por WhatsApp, antes y después de la compra."}]'::jsonb
  where id = 1;
 update public.tiendas
    set eslogan = 'Precio claro, pago de contado.',

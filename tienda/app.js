@@ -762,7 +762,7 @@ function vNuevaClave(){
 function vFinanciamiento(){
   const eq = S.products.filter(p=>p.active!==false && p.fin && ST(p.store).cuotas && p.price>=S.cfg.minFin).sort((a,b)=>a.price-b.price);
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>Financiamiento</span></div>
-  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu teléfono pagando una inicial y el resto en cuotas mensuales fijas. ${finStores().length?`Disponible en ${finStores().map(t=>esc(t.name)).join(' y ')}.`:''} La inicial y el número de cuotas de cada equipo los define la tienda.</p>
+  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu teléfono pagando una inicial y el resto en cuotas. ${finStores().length?`Disponible en ${finStores().map(t=>esc(t.name)).join(' y ')}.`:''} La inicial y el número de cuotas de cada equipo los define la tienda.</p>
   <div class="two">
     <section class="box"><h2>Equipos en cuotas</h2>
       ${eq.length?`<div class="tbl"><table class="t"><thead><tr><th>Equipo</th><th class="r">Precio</th><th class="r">Inicial</th><th class="r">Cuotas</th></tr></thead><tbody>
