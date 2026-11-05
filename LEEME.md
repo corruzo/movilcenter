@@ -11,7 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13 y 14) para ejecutarlo de una sola vez. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14 y 15) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -20,6 +20,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
 | `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
+| `supabase/15_sin_cupo_y_correos.sql` | Sin límite de cupo y avisos por correo (Resend). |
 | `supabase/14_sin_zelle.sql` | Solo pago móvil y transferencia (sin Zelle). |
 | `supabase/13_frases.sql` | Frases de portada según la forma de pago de cada tienda. |
 | `supabase/12_cuotas_fijas.sql` | El admin fija en cuántas cuotas se paga cada equipo; frases de confianza en la portada. |
@@ -41,7 +42,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
 2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
-   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13 y 14. Se pueden ejecutar más de una vez sin dañar nada.)
+   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14 y 15. Se pueden ejecutar más de una vez sin dañar nada.)
 3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
 
@@ -129,7 +130,7 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
 ## Uso diario
 
 - **Compras en las dos tiendas:** el cliente puede tener productos de las dos en el carrito, pero cada tienda se paga por separado (un pedido por tienda), con los datos de pago de esa tienda.
-- **Créditos:** el cupo y el máximo de créditos son por tienda (cada tienda arriesga su dinero). Si el cliente tiene una cuota vencida en cualquiera de las dos, no puede pedir un crédito nuevo hasta ponerse al día.
+- **Créditos:** no hay límite de monto; el máximo de créditos abiertos es por tienda. Si el cliente tiene una cuota vencida en cualquiera de las dos, no puede pedir un crédito nuevo hasta ponerse al día.
 - **Encargos:** si un cliente busca un modelo que no está o está agotado, lo encarga desde **Encargos** (o desde el botón del equipo agotado), eligiendo la tienda. Le llega al panel de esa tienda en **Encargos** y el cliente lo envía también por WhatsApp. El admin le escribe con precio y fecha y va cambiando el estado: nuevo, contactado, en camino, listo, entregado o descartado.
 - **Identidad:** el cliente la verifica una sola vez y sirve para las dos tiendas.
 
@@ -145,6 +146,24 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
 - **Créditos y cuotas:** aquí ves las moras y puedes condonarlas.
 - **Historial de cambios:** registro de lo que hizo cada administrador.
 - El cierre diario corre solo cada noche. También puedes ejecutarlo desde **Resumen**.
+
+## Avisos por correo (opcional, gratis)
+
+Cada aviso que el cliente ve en **Notificaciones** (recordatorio 3 días antes de cada cuota, mora, pago verificado, pedido enviado…) también le puede llegar por correo. Se usa **Resend** (gratis hasta 100 correos al día).
+
+1. Crea una cuenta en **resend.com**.
+2. En **Domains → Add domain** escribe `prioritynstore.com`. Resend te muestra unos registros DNS: agrégalos en **Netlify → Domain management → prioritynstore.com → DNS settings → Add new record**, tal como aparecen. Espera a que Resend diga **Verified**.
+3. En **API Keys → Create API key** crea una clave (empieza con `re_`). Es secreta: no la compartas ni la pegues en la página.
+4. En Supabase abre **SQL Editor → New query**, pega esto con tu clave y pulsa **Run**:
+
+```sql
+select vault.create_secret('re_TU_CLAVE_AQUI', 'resend_api_key');
+select vault.create_secret('Priority One y Papa''s Store <avisos@prioritynstore.com>', 'correo_remitente');
+```
+
+Listo: desde ese momento cada notificación nueva sale también por correo. Si algún día cambias la clave, borra la anterior en **Project Settings → Vault** y repite el paso 4.
+
+**WhatsApp:** en **Panel → Créditos y cuotas** (y en el Resumen) cada cuota pendiente tiene el botón **Recordar**, que abre WhatsApp con el mensaje ya escrito para ese cliente. Enviarlos de forma 100% automática requiere la API oficial de WhatsApp Business (verificación de Meta y un costo por mensaje).
 
 ## Plan gratuito: lo que debes saber
 

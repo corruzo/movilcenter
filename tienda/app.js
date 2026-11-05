@@ -244,7 +244,6 @@ function eligibility(financed, store){
   const why = [];
   if(k.en_mora) why.push('Tienes un crédito con cuotas vencidas. Ponte al día para solicitar uno nuevo.');
   if(k.activos >= S.cfg.maxCreditos) why.push(`Ya tienes ${k.activos} créditos abiertos en esta tienda (máximo ${S.cfg.maxCreditos}).`);
-  if(financed > +k.disponible) why.push(`El monto a financiar (${usd(financed)}) supera tu cupo disponible en esta tienda (${usd(k.disponible)}). Sube la inicial o reduce el carrito.`);
   return {limite:+k.limite, usado:+k.usado, disp:+k.disponible, ok:!why.length, why};
 }
 const cartOf = store => S.cart.filter(i=>P(i.pid)?.store===store);
@@ -773,7 +772,6 @@ function vFinanciamiento(){
         <tr><td>Inicial y cuotas</td><td>Las define la tienda para cada equipo</td></tr>
         <tr><td>Compra mínima</td><td>${usd(S.cfg.minFin)}</td></tr>
         <tr><td>Mora</td><td>${usd(S.cfg.mora)} fijos por cada cuota pagada después de su vencimiento</td></tr>
-        <tr><td>Cupo inicial</td><td>${usd(S.cfg.cupoBase)} en cada tienda; sube ${usd(S.cfg.cupoPorLiq)} por cada crédito liquidado en esa tienda</td></tr>
         <tr><td>Créditos simultáneos</td><td>Máximo ${S.cfg.maxCreditos} por tienda</td></tr>
         <tr><td>Requisitos</td><td>Cuenta registrada con cédula, verificación de identidad y no tener cuotas vencidas</td></tr>
       </table>
@@ -805,7 +803,7 @@ function vCuenta(){
         <div class="kpi"><div class="l">Pedidos en curso</div><div class="v num">${act.length}</div></div>
         <div class="kpi ${cr.some(c=>c.st==='en_mora')?'alert':''}"><div class="l">Saldo de créditos</div><div class="v num">${usd(deuda)}</div></div>
         <div class="kpi"><div class="l">Próxima cuota</div><div class="v num" style="font-size:18px">${nxt?`${usd(cuotaDue(nxt.q))}<div class="muted small" style="font-family:var(--f-body);font-weight:500">${nxt.q.due<dayStart(S.today)?'Vencida el ':'Vence el '}${fd(nxt.q.due)}</div>`:'—'}</div></div>
-        <div class="kpi"><div class="l">Cupo disponible para cuotas</div>${finStores().map(t=>{const c=S.cupos[t.id]||{};return `<div class="cupo-l"><span>${esc(t.name)}</span><b class="num">${usd(c.disponible)}</b></div>`}).join('')}</div>
+        <div class="kpi"><div class="l">Créditos abiertos</div><div class="v num">${cr.filter(c=>['evaluacion','activo','en_mora'].includes(c.st)).length}</div></div>
       </div>
       ${cr.filter(c=>c.st==='en_mora').map(c=>`<div class="note bad">Tu crédito ${c.code} tiene cuotas vencidas. Cada cuota vencida suma ${usd(S.cfg.mora)} de mora. <button class="link" data-act="acct" data-v="creditos">Pagar ahora</button></div>`).join('')}
       ${ords.filter(o=>o.st==='pendiente_pago').map(o=>`<div class="note warn">El pedido ${o.code} está reservado hasta el ${fdt(o.deadline)}. ${false?'':'<button class="link" data-act="payorder" data-o="'+o.id+'">Subir comprobante</button>'}</div>`).join('')}
@@ -919,7 +917,7 @@ function aResumen(){
     <div class="chart"><h3 style="margin-bottom:8px">Pagos verificados por mes (USD)</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pagos verificados por mes">${grid}${bars}</svg></div>
     ${!cuo?alertas:`<div class="two" style="grid-template-columns:1fr 1fr">
       <section class="box"><h3>Cuotas vencidas y por vencer (7 días)</h3>
-        ${soon.length?`<div class="tbl"><table class="t"><tbody>${soon.map(({c,q})=>`<tr><td>${esc(U(c.userId)?.name||'')}<div class="muted small">${c.code} · cuota ${q.n}</div></td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(cuotaDue(q))}</td><td>${q.status==='en_revision'?'<span class="tag warn">En revisión</span>':q.due<today?'<span class="tag bad">Vencida</span>':'<span class="tag">Por vencer</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Nada pendiente en los próximos 7 días.</p>'}</section>
+        ${soon.length?`<div class="tbl"><table class="t"><tbody>${soon.map(({c,q})=>`<tr><td>${esc(U(c.userId)?.name||'')}<div class="muted small">${c.code} · cuota ${q.n}</div></td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(cuotaDue(q))}</td><td>${q.status==='en_revision'?'<span class="tag warn">En revisión</span>':q.due<today?'<span class="tag bad">Vencida</span>':'<span class="tag">Por vencer</span>'}</td><td class="nw">${q.status==='pendiente'?cuotaWa(c,q):''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Nada pendiente en los próximos 7 días.</p>'}</section>
       ${alertas}
     </div>`}`;
 }
@@ -952,10 +950,20 @@ function aCreditos(){
       `<div class="tbl"><table class="t"><thead><tr><th>Cuota</th><th>Vence</th><th class="r">Monto</th><th class="r">Mora</th><th>Estado</th><th></th></tr></thead><tbody>
       ${c.cuotas.map(q=>{const late=q.status!=='pagada'&&q.due<today; return `<tr><td>${q.n}/${c.n}</td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(q.amount)}</td><td class="r num">${q.mora?`<span class="mora">${usd(q.mora)}</span>`:'—'}</td>
       <td>${q.status==='pagada'?`<span class="tag ok">Pagada ${fd(q.paidAt)}</span>`:q.status==='en_revision'?'<span class="tag warn">En revisión</span>':late?`<span class="tag bad">Vencida · ${days(q.due,S.today)} días</span>`:'<span class="tag">Pendiente</span>'}</td>
-      <td class="nw">${q.mora&&q.status!=='pagada'?`<button class="btn sm" data-act="condonar" data-q="${q.id}">Condonar mora</button>`:''}</td></tr>`}).join('')}
+      <td class="nw">${q.status==='pendiente'?cuotaWa(c,q):''} ${q.mora&&q.status!=='pagada'?`<button class="btn sm" data-act="condonar" data-q="${q.id}">Condonar mora</button>`:''}</td></tr>`}).join('')}
       </tbody></table></div>`}</div></article>`}).join(''):'<div class="empty">No hay créditos en este filtro.</div>'}`;
 }
 const VENDIDO = ['preparando','listo_retiro','enviado','entregado'];
+// enlace de WhatsApp con el recordatorio de una cuota, listo para enviar
+function cuotaWa(c, q){
+  const u = U(c.userId); if(!u || !u.phone) return '';
+  const late = q.due < dayStart(S.today), t = ST(c.store);
+  const msg = `Hola ${u.name.split(' ')[0]}, te escribimos de ${t.name}. `
+    + (late ? `Tu cuota ${q.n} de ${c.n} (crédito ${c.code}) venció el ${fd(q.due)}${q.mora?` y ya tiene ${usd(q.mora)} de mora`:''}. El monto a pagar es ${usd(cuotaDue(q))}.`
+            : `Te recordamos que tu cuota ${q.n} de ${c.n} (crédito ${c.code}) por ${usd(cuotaDue(q))} vence el ${fd(q.due)}.`)
+    + ` Puedes pagarla y subir el comprobante desde tu cuenta en ${location.host || 'la página'}. ¡Gracias!`;
+  return `<a class="btn sm" href="https://wa.me/${waNum(u.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico('chat')} Recordar</a>`;
+}
 function aVentas(){
   const f = S.admF.ven || 'todas';
   const sales = S.orders.filter(inAdm).filter(o=>VENDIDO.includes(o.st));
@@ -1141,7 +1149,7 @@ function aConfig(){
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
-      <div class="field" ${admCuo()?'':'hidden'}><label for="c-cupo">Cupo inicial por cliente en cada tienda (USD)</label><input id="c-cupo" inputmode="decimal" value="${c.cupoBase}"></div>
+      <input id="c-cupo" type="hidden" value="${c.cupoBase}">
     </div>
     ${admCuo()?`<h3>Opciones de cuotas</h3>
     <p class="muted small" style="margin-top:-8px">Son las opciones que puedes asignar a cada equipo, con su recargo. En Inventario, al editar un equipo, eliges en cuántas cuotas se paga; el cliente no lo elige.</p>
@@ -1169,13 +1177,17 @@ const onlyDigits = s => String(s||'').replace(/\D/g,'');
 const normTel = s => { let d = onlyDigits(s); if(/^58\d{10}$/.test(d)) d = '0'+d.slice(2); if(/^[24]\d{9}$/.test(d)) d = '0'+d; return d; };
 const telOk = s => /^0\d{10}$/.test(normTel(s));
 const waNum = tel => { const d = normTel(tel); return d ? '58'+d.slice(1) : ''; };
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// fecha de nacimiento a partir de los tres selectores (o vacía si no existe, ej. 31 de febrero)
+const nacOf = k => { const d = +k.nacD, m = +k.nacM, y = +k.nacY; if(!d||!m||!y) return ''; const f = new Date(y, m-1, d); if(f.getMonth()!==m-1) return '';
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; };
 const edad = d => { if(!d) return null; const b = new Date(d+'T12:00:00'), t = new Date(); let a = t.getFullYear()-b.getFullYear(); if(t < new Date(t.getFullYear(), b.getMonth(), b.getDate())) a--; return a; };
 const cedField = (pre, tipo, num) => `<div class="cedrow"><select id="${pre}-tipo" data-k="${pre==='r'?'tipo':'ptipo'}" aria-label="Tipo de documento"><option ${tipo!=='E'?'selected':''}>V</option><option ${tipo==='E'?'selected':''}>E</option></select>
   <input id="${pre}-ced" data-k="${pre==='r'?'ced':'pced'}" data-digits="9" inputmode="numeric" placeholder="12345678" value="${esc(num||'')}" autocomplete="off"></div>`;
 
 // Estado del formulario de verificación (sobrevive a los redibujados)
 function kycInit(u){
-  if(!S.kyc) S.kyc = {tipo:'V', ced:'', nombre:'', email:'', tel:'', pass:'', nac:'', estado:u?.estadoVzla||'', ciudad:u?.city||'', dir:u?.addr||'',
+  if(!S.kyc) S.kyc = {tipo:'V', ced:'', nombre:'', email:'', tel:'', pass:'', nac:'', nacD:u?.nac?+u.nac.slice(8,10):'', nacM:u?.nac?+u.nac.slice(5,7):'', nacY:u?.nac?+u.nac.slice(0,4):'', estado:u?.estadoVzla||'', ciudad:u?.city||'', dir:u?.addr||'',
     ocup:'', trabajo:'', ingreso:'', refNom:'', refTel:'', refPar:'', cedula:null, selfie:null, cedulaUrl:'', selfieUrl:'', lat:null, lng:null, acc:null, locMsg:'', locSkip:false, terms:false, err:''};
   return S.kyc;
 }
@@ -1217,8 +1229,9 @@ function kycSections(n0){
 }
 function kycErrors(){
   const k = S.kyc;
-  if(!k.nac) return 'Indica tu fecha de nacimiento.';
-  if(edad(k.nac) < 18) return 'Debes ser mayor de edad para crear una cuenta.';
+  if(!k.nacD || !k.nacM || !k.nacY) return 'Indica tu fecha de nacimiento: día, mes y año.';
+  if(!nacOf(k)) return 'Esa fecha de nacimiento no existe. Revisa el día y el mes.';
+  if(edad(nacOf(k)) < 18) return 'Debes ser mayor de edad para comprar en cuotas.';
   if(!k.estado || k.ciudad.trim().length<3 || k.dir.trim().length<8) return 'Completa tu dirección: estado, ciudad y dirección.';
   if(k.lat==null && !k.locSkip) return 'Pulsa “Compartir mi ubicación actual”.';
   if(!k.ocup || !k.ingreso) return 'Indica tu ocupación e ingreso aproximado.';
@@ -1248,7 +1261,7 @@ async function uploadDoc(blob, name){
 async function sendKyc(){
   const k = S.kyc;
   const [c1, c2] = [await uploadDoc(k.cedula, 'cedula'), await uploadDoc(k.selfie, 'selfie')];
-  await rpc('completar_verificacion', {p:{fecha_nacimiento:k.nac, estado:k.estado, ciudad:k.ciudad, direccion:k.dir, ocupacion:k.ocup, lugar_trabajo:k.trabajo,
+  await rpc('completar_verificacion', {p:{fecha_nacimiento:nacOf(k), estado:k.estado, ciudad:k.ciudad, direccion:k.dir, ocupacion:k.ocup, lugar_trabajo:k.trabajo,
     ingreso_rango:k.ingreso, cedula_foto:c1, selfie_foto:c2,
     lat:k.lat==null?'':String(k.lat), lng:k.lng==null?'':String(k.lng), precision:k.acc==null?'':String(Math.round(k.acc))}});
   S.kyc = null;
@@ -1301,7 +1314,11 @@ function verifPanel(){
   kycInit(u);
   return `<h1>Verificación para comprar en cuotas</h1>
     ${v==='rechazado'?`<div class="note bad">No pudimos verificar tus documentos${u.verifNota?': '+esc(u.verifNota):''}. Vuelve a enviarlos.</div>`:`<p class="muted">Solo la pedimos para comprar en cuotas. Toma unos 2 minutos y no tienes que esperar: puedes hacer tu solicitud apenas la envíes.</p>`}
-    <section class="box"><h2><span class="stepn">1</span>Fecha de nacimiento</h2><div class="field" style="max-width:260px"><input id="k-nac" type="date" data-k="nac" value="${esc(S.kyc.nac)}" aria-label="Fecha de nacimiento"></div></section>
+    <section class="box"><h2><span class="stepn">1</span>Fecha de nacimiento</h2><div class="nac">${(()=>{ const k = S.kyc, y0 = new Date().getFullYear();
+      const opt = (v, l, cur) => `<option value="${v}" ${String(cur)===String(v)?'selected':''}>${l}</option>`;
+      return `<div class="field"><label for="k-nacd">Día</label><select id="k-nacd" data-k="nacD"><option value="">Día</option>${Array.from({length:31},(_,i)=>opt(i+1,i+1,k.nacD)).join('')}</select></div>
+      <div class="field"><label for="k-nacm">Mes</label><select id="k-nacm" data-k="nacM"><option value="">Mes</option>${MESES.map((m,i)=>opt(i+1,m,k.nacM)).join('')}</select></div>
+      <div class="field"><label for="k-nacy">Año</label><select id="k-nacy" data-k="nacY"><option value="">Año</option>${Array.from({length:73},(_,i)=>y0-18-i).map(y=>opt(y,y,k.nacY)).join('')}</select></div>`; })()}</div></section>
     ${kycSections(2)}
     ${S.kyc.err?`<div class="note bad small">${esc(S.kyc.err)}</div>`:''}
     <div><button class="btn buy" data-act="dokyc">${S.busy?'Enviando…':S.after==='checkout'?'Enviar y volver a mi compra':'Enviar verificación'}</button></div>`;
@@ -1552,8 +1569,7 @@ function reviewModal(id){
   if(p.kind==='inicial'){ const c=C(p.creditId), h=historial(p.userId);
     extra = `<dt>Crédito</dt><dd>${c.code} · ${c.n} cuotas de ${usd(r2(c.financed/c.n))}</dd><dt>Financiado</dt><dd>${usd(c.financed)} (inicial ${Math.round(c.iniPct*100)}%)</dd>
       <dt>Identidad</dt><dd>${verifTag(u.verif)} <button class="link small" data-act="cliente" data-u="${u.id}">Ver en Clientes</button></dd>
-      <dt>Cupo</dt><dd id="rc-cupo">Consultando…</dd><dt>Historial</dt><dd>${h.n} pedidos · ${h.liq} crédito(s) pagado(s) · ${h.moras} cuota(s) con mora</dd>`;
-    sb.rpc('cupo_cliente', {p_usuario:p.userId, p_tienda:p.store}).then(({data})=>{ const el=$('#rc-cupo'); if(el && data) el.textContent = `${usd(data.limite)} · usado ${usd(data.usado)} (incluye esta solicitud)`; }); }
+      <dt>Historial</dt><dd>${h.n} pedidos · ${h.liq} crédito(s) pagado(s) · ${h.moras} cuota(s) con mora</dd>`; }
   if(p.kind==='cuota'){ const c=C(p.creditId); extra = `<dt>Cuotas</dt><dd>${p.cuotas.map(n=>{const q=c.cuotas.find(x=>x.n===n);return `${n} (${usd(q.amount)}${q.mora?` + ${usd(q.mora)} mora`:''})`}).join(', ')}</dd>`; }
   if(p.kind==='contado'){ const o=O(p.orderId); extra = `<dt>Pedido</dt><dd>${o.items.map(i=>`${i.qty} × ${esc(i.name)}`).join(', ')}</dd><dt>Entrega</dt><dd>${esc(S.cfg.envio[o.ship.method]?.n||'')}</dd>`; }
   const okL = p.kind==='contado'?'Verificar pago':p.kind==='inicial'?(u.verif==='pendiente'?'Aprobar crédito y verificar identidad':'Aprobar crédito'):'Verificar cuota';
