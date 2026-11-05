@@ -2096,16 +2096,12 @@ end $$;
 drop trigger if exists pago_metodo on public.pagos;
 create trigger pago_metodo before insert on public.pagos for each row execute function public._pago_metodo();
 
--- >>>>>>>>>> 15_sin_cupo_y_correos.sql
+-- >>>>>>>>>> 15_sin_cupo.sql
 -- =====================================================================
---  Actualización 15 · Sin límite de cupo y avisos por correo
---  1. Ya no hay un monto máximo para financiar. Solo se bloquea pedir un
+--  Actualización 15 · Sin límite de cupo
+--  Ya no hay un monto máximo para financiar. Solo se bloquea pedir un
 --     crédito nuevo si el cliente tiene cuotas vencidas o ya tiene el
 --     máximo de créditos abiertos en esa tienda.
---  2. Cada aviso que el cliente recibe en "Notificaciones" (recordatorio
---     de cuota, mora, pago verificado, pedido enviado...) también le llega
---     por correo. Funciona cuando guardas la clave de Resend (ver LEEME,
---     "Avisos por correo"); mientras no exista la clave, no hace nada.
 --  Ejecutar DESPUÉS de 14_sin_zelle.sql. Se puede ejecutar más de una vez.
 -- =====================================================================
 
@@ -2128,36 +2124,6 @@ begin
                             'ok', cardinality(motivos) = 0, 'motivos', to_jsonb(motivos));
 end $$;
 
--- 2. Avisos por correo (Resend) -----------------------------------------
-create extension if not exists pg_net;
-
-create or replace function public._correo_aviso() returns trigger
-language plpgsql security definer set search_path = public as $$
-declare v_key text; v_from text; v_email text; v_nombre text; v_txt text;
-begin
-  select decrypted_secret into v_key from vault.decrypted_secrets where name = 'resend_api_key' limit 1;
-  if v_key is null then return new; end if;                       -- aún no configurado
-  select decrypted_secret into v_from from vault.decrypted_secrets where name = 'correo_remitente' limit 1;
-  select email, nombre into v_email, v_nombre from perfiles where id = new.usuario_id;
-  if v_email is null then return new; end if;
-  v_txt := replace(replace(replace(new.texto, '&', '&amp;'), '<', '&lt;'), '>', '&gt;');
-  perform net.http_post(
-    url     := 'https://api.resend.com/emails',
-    headers := jsonb_build_object('Authorization', 'Bearer ' || v_key, 'Content-Type', 'application/json'),
-    body    := jsonb_build_object(
-      'from', coalesce(v_from, 'Priority One y Papa''s Store <avisos@prioritynstore.com>'),
-      'to', jsonb_build_array(v_email),
-      'subject', 'Tienes un aviso en tu cuenta',
-      'html', '<div style="font-family:Arial,sans-serif;font-size:15px;color:#151515;max-width:520px">'
-           || '<p>Hola ' || coalesce(split_part(v_nombre, ' ', 1), '') || ',</p>'
-           || '<p>' || v_txt || '</p>'
-           || '<p><a href="https://prioritynstore.com/#cuenta" style="background:#C9A227;color:#111;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Ir a mi cuenta</a></p>'
-           || '<p style="color:#777;font-size:12px">Priority One y Papa''s Store · prioritynstore.com</p></div>'));
-  return new;
-exception when others then
-  return new;                                                     -- un correo fallido nunca bloquea la operación
-end $$;
-
+-- (Los avisos por correo se descartaron: los recordatorios se envían por WhatsApp desde el panel.)
 drop trigger if exists correo_aviso on public.notificaciones;
-create trigger correo_aviso after insert on public.notificaciones for each row execute function public._correo_aviso();
-revoke execute on function public._correo_aviso() from public, anon, authenticated;
+drop function if exists public._correo_aviso();
