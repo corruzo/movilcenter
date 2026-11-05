@@ -99,7 +99,9 @@ function img(p, colorIdx=0){
 }
 
 /* ===================== catálogos fijos ===================== */
+// categorías que el admin puede usar; en la tienda solo se muestran las que tienen productos
 const CATS = ['Teléfonos','Tablets','Smartwatch','Audio','Accesorios'];
+const catsEnUso = () => CATS.filter(c=>S.products.some(p=>p.active!==false && p.cat===c));
 const METODOS = {
   pago_movil:{n:'Pago móvil', cur:'Bs'}, transferencia:{n:'Transferencia bancaria', cur:'Bs'},
   zelle:{n:'Zelle', cur:'USD'},
@@ -343,10 +345,10 @@ function logoHTML(){
 function renderChrome(){
   const u = me(); const cnt = sum(S.cart,i=>i.qty);
   const un = u ? S.notifs.filter(n=>!n.read).length : 0;
-  $('#strip').innerHTML = `<span>Envíos a todo el país · ${[...finStores().map(t=>`Cuotas en ${esc(t.name)}`), ...cashStores().map(t=>`Contado en ${esc(t.name)}`)].join(' · ')}</span>${S.cfg?`<span>Tasa del día: <b class="num">${bs(S.cfg.tasa)}</b> por dólar</span>`:''}`;
+  $('#strip').innerHTML = ''; $('#strip').parentElement.hidden = true;
   $('#hd').innerHTML = `
     <button class="logo" data-act="go" data-v="inicio" aria-label="Inicio: ${esc(siteName())}">${logoHTML()}</button>
-    <form class="search" id="searchf" role="search"><input id="q" placeholder="Buscar teléfonos, tablets, accesorios…" value="${esc(S.f.q)}" aria-label="Buscar"><button type="submit" aria-label="Buscar">${ico('search')}</button></form>
+    <form class="search" id="searchf" role="search"><input id="q" placeholder="Buscar un teléfono por marca o modelo…" value="${esc(S.f.q)}" aria-label="Buscar"><button type="submit" aria-label="Buscar">${ico('search')}</button></form>
     <div class="hact">
       ${isAdmin() ? `<button class="hbtn" data-act="go" data-v="admin">${ico('grid')}<span class="lb">Panel<small>${myStore()?esc(ST(myStore()).name):'Administración'}</small></span></button>` : ''}
       ${u && !isAdmin() ? `<button class="hbtn" data-act="acct" data-v="notificaciones" aria-label="Notificaciones">${ico('bell')}${un?`<span class="cnt">${un}</span>`:''}</button>` : ''}
@@ -355,8 +357,9 @@ function renderChrome(){
       <button class="hbtn" data-act="go" data-v="carrito">${ico('cart')}${cnt?`<span class="cnt">${cnt}</span>`:''}<span class="lb">Carrito<small class="num">${usd(sum(S.cart,i=>i.unit*i.qty))}</small></span></button>
     </div>`;
   const v = S.route.v;
-  $('#cats').innerHTML = CATS.map(c=>`<button data-act="cat" data-v="${c}" aria-current="${v==='catalogo' && S.f.cat===c}">${c}</button>`).join('')
-    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">Todo el catálogo</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
+  const cu = catsEnUso();
+  $('#cats').innerHTML = (cu.length>1 ? cu.map(c=>`<button data-act="cat" data-v="${c}" aria-current="${v==='catalogo' && S.f.cat===c}">${c}</button>`).join('') : '')
+    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">${cu.length>1?'Todo el catálogo':'Catálogo'}</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
   $('#foot').innerHTML = `<div class="wrap cols">
       <div><div class="logo">${logoHTML()}</div>
         <p style="margin-top:10px;max-width:34ch">Dos tiendas, una sola cuenta. ${finStores().map(t=>esc(t.name)).join(' y ')} vende en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado.</p></div>
@@ -384,7 +387,7 @@ function storyHTML(){
     <div class="hero-copy" id="hero">
       <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
       <h1>${['Cuotas','o','contado.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Tú','eliges','la','tienda.'].map((w,i)=>`<span class="w g" style="animation-delay:${.35+i*.09}s">${w}</span>`).join(' ')}</em></h1>
-      <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span>${t.cuotas?'Inicial y el resto en cuotas, sin bancos. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span></div></li>`).join('')}</ul>
+      <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span>${t.cuotas?'Das una inicial y el resto lo pagas en cuotas. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span></div></li>`).join('')}</ul>
       <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Comprar en cuotas':'Comprar de contado'} →</button>`).join('')}</div>
     </div>
     <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
@@ -440,7 +443,7 @@ function vInicio(){
         <div class="row"><button class="btn buy" data-act="tienda" data-v="${t.id}">Ver catálogo →</button>${wa?`<a class="btn ghost" href="${wa}" target="_blank" rel="noopener">${ico('chat')} WhatsApp</a>`:''}</div></article>`; }).join('')}</div>
   </div></section>
   <section class="blk" id="cuotas"><div class="wrap">
-    <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas${finStores().length===1?' en '+esc(finStores()[0].name):''}</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Sin bancos ni papeleo. Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
+    <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas${finStores().length===1?' en '+esc(finStores()[0].name):''}</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
     <div class="steps">
       <article class="step reveal"><span class="n">01</span><h3>Crea tu cuenta</h3><p>Nombre, cédula y teléfono, solo con números. Con eso ya compras de contado en las dos tiendas.</p></article>
       <article class="step reveal"><span class="n">02</span><h3>Elige tu equipo</h3><p>Cada equipo muestra su inicial y sus cuotas. Envías una foto tuya y de tu cédula, y pagas la inicial. Tus fotos y tu ubicación quedan privadas.</p></article>
@@ -559,7 +562,7 @@ function vCatalogo(){
   <div class="catalog">
     <aside class="filters">
       <div><h4>Tienda</h4><label class="ck"><input type="radio" name="fs" data-on="fstore" value="" ${!f.store?'checked':''}>Las dos tiendas</label>${S.stores.map(t=>`<label class="ck"><input type="radio" name="fs" data-on="fstore" value="${t.id}" ${f.store===t.id?'checked':''}>${esc(t.name)}</label>`).join('')}</div>
-      <div><h4>Categoría</h4>${['',...CATS].map(c=>`<label class="ck"><input type="radio" name="fc" data-on="fcat" value="${c}" ${(f.cat||'')===c?'checked':''}>${c||'Todas'}</label>`).join('')}</div>
+      ${catsEnUso().length<2?'':`<div><h4>Categoría</h4>${['',...catsEnUso()].map(c=>`<label class="ck"><input type="radio" name="fc" data-on="fcat" value="${c}" ${(f.cat||'')===c?'checked':''}>${c||'Todas'}</label>`).join('')}</div>`}
       <div><h4>Marca</h4>${brands.map(b=>`<label class="ck"><input type="checkbox" data-on="fbrand" value="${esc(b)}" ${f.brands.includes(b)?'checked':''}>${esc(b)}</label>`).join('')}</div>
       <div><h4>Precio máximo</h4><div class="field"><select data-on="fmax" aria-label="Precio máximo"><option value="">Sin límite</option>${[100,200,300,500,800].map(v=>`<option value="${v}" ${+f.max===v?'selected':''}>Hasta ${usd(v)}</option>`).join('')}</select></div></div>
       <div><h4>Disponibilidad</h4>
@@ -759,7 +762,7 @@ function vNuevaClave(){
 function vFinanciamiento(){
   const eq = S.products.filter(p=>p.active!==false && p.fin && ST(p.store).cuotas && p.price>=S.cfg.minFin).sort((a,b)=>a.price-b.price);
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>Financiamiento</span></div>
-  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu equipo pagando una inicial y el resto en cuotas mensuales fijas, sin trámites bancarios. ${finStores().length?`Disponible en ${finStores().map(t=>esc(t.name)).join(' y ')}.`:''} La inicial y el número de cuotas de cada equipo los define la tienda.</p>
+  <h1 style="margin-bottom:6px">Financiamiento</h1><p class="muted" style="margin-bottom:20px;max-width:70ch">Compra tu teléfono pagando una inicial y el resto en cuotas mensuales fijas. ${finStores().length?`Disponible en ${finStores().map(t=>esc(t.name)).join(' y ')}.`:''} La inicial y el número de cuotas de cada equipo los define la tienda.</p>
   <div class="two">
     <section class="box"><h2>Equipos en cuotas</h2>
       ${eq.length?`<div class="tbl"><table class="t"><thead><tr><th>Equipo</th><th class="r">Precio</th><th class="r">Inicial</th><th class="r">Cuotas</th></tr></thead><tbody>
