@@ -672,3 +672,17 @@ nav.cats .tasa b{color:var(--gold-l);font-weight:700}
   .contrato .firmas{margin-top:34px}
   @page{margin:12mm}
 }
+/* portada en el celular: textos más compactos para que no tapen el teléfono */
+@media (max-width:760px){
+  .story .hero-copy{top:3%}
+  .story .hero-copy .eyebrow{margin-bottom:8px;font-size:11px}
+  .story .hero-copy h1{font-size:clamp(28px,7.6vw,40px)}
+  .story .hero-copy .hero-st{margin:10px 0 12px;gap:4px}
+  .story .hero-copy .hero-st b{display:inline;font-size:14.5px}
+  .story .hero-copy .hero-st b::after{content:': '}
+  .story .hero-copy .hero-st span{display:inline;font-size:14px}
+  .story .hero-copy .row{flex-wrap:nowrap;gap:8px;margin-top:10px}
+  .story .hero-copy .row .btn{padding:11px 14px;font-size:14px;white-space:nowrap}
+}
+.story .hero-copy .hero-st .sh{display:none}
+@media (max-width:760px){.story .hero-copy .hero-st .lg{display:none}.story .hero-copy .hero-st .sh{display:inline}}

@@ -402,7 +402,7 @@ function storyHTML(){
     <div class="hero-copy" id="hero">
       <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
       <h1>${['Cuotas','o','contado.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Tú','eliges','la','tienda.'].map((w,i)=>`<span class="w g" style="animation-delay:${.35+i*.09}s">${w}</span>`).join(' ')}</em></h1>
-      <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span>${t.cuotas?'Das una inicial y el resto lo pagas en cuotas. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span></div></li>`).join('')}</ul>
+      <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span class="lg">${t.cuotas?'Das una inicial y el resto lo pagas en cuotas. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span><span class="sh">${t.cuotas?'cuotas o contado':'solo de contado'}</span></div></li>`).join('')}</ul>
       <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Comprar en cuotas':'Comprar de contado'} →</button>`).join('')}</div>
     </div>
     <div class="scene" id="scene" aria-hidden="true"><div class="scene-scale">
