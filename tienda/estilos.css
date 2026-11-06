@@ -642,3 +642,32 @@ nav.cats .tasa b{color:var(--gold-l);font-weight:700}
 .seg.seg4{grid-template-columns:repeat(4,1fr)}
 @media (max-width:560px){.seg.seg4{grid-template-columns:repeat(2,1fr)}}
 .ck.terms{align-items:flex-start;line-height:1.4}.ck.terms input{margin-top:3px}
+.terms-txt h3{margin:14px 0 6px;font-size:16px}
+.terms-txt ol{margin:0;padding-left:20px;display:grid;gap:7px;font-size:14.5px;line-height:1.45}
+/* contrato */
+#print{display:none}
+.contrato{font-family:Georgia,'Times New Roman',serif;color:#111;font-size:13.5px;line-height:1.5}
+.contrato h2{font-size:17px;text-align:center;margin:0 0 12px}
+.contrato h3{font-size:14px;text-align:center;margin:14px 0 6px;letter-spacing:.04em}
+.contrato p{margin:0 0 8px;text-align:justify}
+.contrato ul.spec{margin:0 0 8px 18px;padding:0}
+.contrato table{border-collapse:collapse;width:100%;margin:4px 0 10px}
+.contrato .crono td{border:1px solid #999;padding:4px 6px;font-size:12px;text-align:center}
+.contrato .rev td{padding:5px 4px;vertical-align:bottom}.contrato .rev td:first-child{width:140px}
+.contrato .ln{display:block;border-bottom:1px solid #111;min-width:160px;height:18px}
+.contrato .firmas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:46px;text-align:center;font-size:12.5px}
+.contrato .firmas .ln{margin-bottom:6px}
+.contrato .muted-p{font-size:11px;color:#666;text-align:right}
+.contrato-prev{background:#fff;border:1px solid #ddd;border-radius:8px;padding:22px;max-height:60vh;overflow:auto}
+@media print{
+  body > *:not(#print){display:none !important}
+  #print{display:block !important;padding:0}
+  @page{margin:16mm}
+}
+@media print{
+  .contrato{font-size:11.6px;line-height:1.38}
+  .contrato h2{font-size:15px;margin-bottom:8px}.contrato h3{margin:9px 0 4px;font-size:12.5px}
+  .contrato p{margin-bottom:5px}.contrato .rev td{padding:2px 4px}.contrato .ln{height:15px}
+  .contrato .firmas{margin-top:34px}
+  @page{margin:12mm}
+}
