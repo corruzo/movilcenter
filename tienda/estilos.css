@@ -13,6 +13,7 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 h1,h2,h3,h4{font-family:var(--f-head);margin:0;line-height:1.2;text-wrap:balance;color:var(--ink)}
