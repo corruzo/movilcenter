@@ -172,7 +172,7 @@ function mapProduct(p){
     ini:p.inicial_min!=null?+p.inicial_min:null, plans:Array.isArray(p.planes)&&p.planes.length?p.planes.map(Number):null,
     cond:p.condicion||'nuevo', bat:p.bateria??null, gar:p.garantia_meses??null, cs:p.cuotas_semanal??null, cq:p.cuotas_quincenal??null };
 }
-function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
+function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, sexo:u.sexo||'', cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
   verif:u.verificacion || (u.rol==='admin'?'verificado':'incompleto'), verifNota:u.verificacion_nota||'', nac:u.fecha_nacimiento||'', estadoVzla:u.estado_vzla||'', ocup:u.ocupacion||'', trabajo:u.lugar_trabajo||'',
   ingreso:u.ingreso_rango||'', refNom:u.ref_nombre||'', refTel:u.ref_telefono||'', refPar:u.ref_parentesco||'', cedulaFoto:u.cedula_foto||'', selfieFoto:u.selfie_foto||'',
   lat:u.ubic_lat!=null?+u.ubic_lat:null, lng:u.ubic_lng!=null?+u.ubic_lng:null, acc:u.ubic_precision}; }
@@ -1404,6 +1404,7 @@ function vRegistro(){
     <section class="box">
       <div class="fg">
         <div class="field" style="grid-column:1/-1"><label for="r-name">Nombre y apellido</label><input id="r-name" data-k="nombre" value="${esc(k.nombre)}" autocomplete="name"></div>
+        <div class="field" style="grid-column:1/-1"><label>Sexo</label><div class="seg seg2">${[['M','Masculino'],['F','Femenino']].map(([v,l])=>`<label class="so"><input type="radio" name="r-sexo" value="${v}" data-k="sexo" ${k.sexo===v?'checked':''}><span class="ot">${l}</span></label>`).join('')}</div></div>
         <div class="field"><label for="r-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('r', k.tipo, k.ced)}</div>
         <div class="field"><label for="r-tel">Teléfono <span class="muted">(solo números)</span></label><input id="r-tel" data-k="tel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.tel)}" autocomplete="tel"></div>
         <div class="field" style="grid-column:1/-1"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
@@ -1422,12 +1423,13 @@ async function doRegister(){
   const fail = m => { k.err = m; render(); };
   const name = k.nombre.trim().replace(/\s+/g,' '), em = k.email.trim().toLowerCase(), ced = onlyDigits(k.ced), tel = normTel(k.tel);
   if(name.split(' ').length<2) return fail('Escribe tu nombre y apellido.');
+  if(!['M','F'].includes(k.sexo)) return fail('Indica si eres masculino o femenino.');
   if(!/^\d{6,9}$/.test(ced)) return fail('Escribe tu cédula solo con números, por ejemplo 12345678.');
   if(!/^0\d{10}$/.test(tel)) return fail('Escribe tu teléfono de 11 números, por ejemplo 04141234567.');
   if(!/^\S+@\S+\.\S+$/.test(em)) return fail('Escribe un correo válido.');
   if(k.pass.length<8 || !/\d/.test(k.pass)) return fail('La contraseña debe tener al menos 8 caracteres y un número.');
   if(!k.terms) return fail('Acepta los términos para continuar.');
-  const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, cedula:`${k.tipo}-${ced}`, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
+  const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, sexo:k.sexo, cedula:`${k.tipo}-${ced}`, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
   if(error) return fail(/already registered|already been registered/i.test(error.message) ? 'Ya existe una cuenta con ese correo. Ingresa con tu contraseña.'
     : /Database error/i.test(error.message) ? 'Esa cédula ya está registrada en otra cuenta.' : /Password/i.test(error.message) ? 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.' : friendly(error));
   S.kyc = null;
@@ -1543,7 +1545,7 @@ function clienteModal(uid){
     <div class="docs"><figure><div id="doc-selfie" class="muted small">${u.selfieFoto?'Cargando…':'Sin foto'}</div><figcaption>Foto de la persona</figcaption></figure>
       <figure><div id="doc-cedula" class="muted small">${u.cedulaFoto?'Cargando…':'Sin foto'}</div><figcaption>Cédula</figcaption></figure></div>
     <dl class="dl">
-      <dt>Cédula</dt><dd>${esc(u.cedula)}</dd><dt>Nacimiento</dt><dd>${u.nac?`${fd(dateOnly(u.nac))} (${e} años)`:'—'}</dd>
+      <dt>Cédula</dt><dd>${esc(u.cedula)}</dd><dt>Sexo</dt><dd>${u.sexo==='F'?'Femenino':u.sexo==='M'?'Masculino':'—'}</dd><dt>Nacimiento</dt><dd>${u.nac?`${fd(dateOnly(u.nac))} (${e} años)`:'—'}</dd>
       <dt>Teléfono</dt><dd>${esc(u.phone)} ${u.phone?`<a class="link small" href="https://wa.me/${waNum(u.phone)}" target="_blank" rel="noopener">WhatsApp</a>`:''}</dd><dt>Correo</dt><dd>${esc(u.email)}</dd>
       <dt>Dirección</dt><dd>${esc(u.addr)}${u.city?', '+esc(u.city):''}${u.estadoVzla?', '+esc(u.estadoVzla):''}</dd>
       <dt>Ubicación</dt><dd>${map?`<a class="link" href="${map}" target="_blank" rel="noopener">Ver en el mapa</a> <span class="muted small">(±${u.acc||'?'} m)</span>`:'No compartida'}</dd>
