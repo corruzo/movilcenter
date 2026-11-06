@@ -11,7 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14 y 15) para ejecutarlo de una sola vez. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15 y 16) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -20,6 +20,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
 | `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
+| `supabase/16_pagos_usados_frecuencia.sql` | Pago móvil, transferencia, efectivo y USDT; equipos usados (batería, garantía); cuotas semanales o quincenales. |
 | `supabase/15_sin_cupo.sql` | Sin límite de monto para financiar. |
 | `supabase/14_sin_zelle.sql` | Solo pago móvil y transferencia (sin Zelle). |
 | `supabase/13_frases.sql` | Frases de portada según la forma de pago de cada tienda. |
@@ -42,7 +43,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
 2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
-   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14 y 15. Se pueden ejecutar más de una vez sin dañar nada.)
+   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15 y 16. Se pueden ejecutar más de una vez sin dañar nada.)
 3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
 
@@ -115,7 +116,7 @@ Cada admin **solo ve y gestiona su tienda**: sus pagos, pedidos, créditos, prod
 En **Panel → Configuración**, cada admin completa los **datos de su tienda**:
 - Logo (PNG con fondo transparente), nombre, eslogan, WhatsApp, correo, RIF y horario de atención.
 - Las **2 frases de la portada** que aparecen junto al teléfono animado.
-- Sus **datos para recibir pagos** (pago móvil y transferencia). Son los que ve el cliente al pagarle a esa tienda.
+- Sus **datos para recibir pagos** (pago móvil, transferencia, USDT de Binance y cómo se paga en efectivo). Son los que ve el cliente al pagarle a esa tienda.
 
 Más abajo está la **configuración común**: tasa del día (actualízala cada día), mora, inicial mínima, cupo inicial y las **opciones de cuotas** con su recargo (Papa's Store solo ve la tasa del día).
 
@@ -143,7 +144,8 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
   - en compras de contado, el pedido pasa a preparación;
   - en solicitudes de crédito, se genera el cronograma de cuotas.
 - **Pedidos y envíos:** pulsa **Despachar** y escribe la guía. Después marca **Entregado**.
-- **Créditos y cuotas:** aquí ves las moras y puedes condonarlas.
+- **Créditos y cuotas:** aquí ves las moras, puedes condonarlas, enviar recordatorios por WhatsApp y **registrar pagos en efectivo**.
+- **Pedidos y envíos:** si el cliente eligió efectivo, cuando lo recibas pulsa **Registrar efectivo**.
 - **Historial de cambios:** registro de lo que hizo cada administrador.
 - El cierre diario corre solo cada noche. También puedes ejecutarlo desde **Resumen**.
 

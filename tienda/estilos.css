@@ -633,3 +633,12 @@ nav.cats .tasa{display:flex;align-items:center;gap:6px;margin-left:14px;padding:
 nav.cats .tasa b{color:var(--gold-l);font-weight:700}
 @media (max-width:760px){nav.cats .tasa{order:-1;margin:0 6px 0 0;padding:0 12px 0 0;border-left:0;border-right:1px solid #2a2a2e}}
 .nac{display:grid;grid-template-columns:90px 1fr 110px;gap:10px;max-width:420px}
+/* equipos usados */
+.pc .cond{font-size:13px;color:var(--muted,#6A6A6A)}
+.pc .cond.us{color:#9A6B00;font-weight:600}
+.dk .pc .cond.us{color:#E2C35C}
+.condbox{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:14.5px}
+/* cuatro métodos de pago */
+.seg.seg4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:560px){.seg.seg4{grid-template-columns:repeat(2,1fr)}}
+.ck.terms{align-items:flex-start;line-height:1.4}.ck.terms input{margin-top:3px}
