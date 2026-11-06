@@ -1259,7 +1259,7 @@ function aConfig(){
       <div class="field"><label for="tf-rif">RIF</label><input id="tf-rif" value="${esc(t.rif)}" placeholder="J-12345678-9"></div>
       <div class="field"><label for="tf-rep">Representante (firma los contratos)</label><input id="tf-rep" value="${esc(t.rep)}" placeholder="Nombre y apellido"></div>
       <div class="field"><label for="tf-repc">Cédula del representante</label><input id="tf-repc" value="${esc(t.repCed)}" placeholder="V-12345678"></div>
-      <div class="field" style="grid-column:1/-1"><label for="tf-gc">Garantía: qué cubre</label><input id="tf-gc" value="${esc(t.garCubre)}"></div>
+      <div class="field" style="grid-column:1/-1"><label for="tf-gc">Garantía: qué cubre <span class="muted">(es la misma para las dos tiendas)</span></label><input id="tf-gc" value="${esc(t.garCubre)}"></div>
       <div class="field" style="grid-column:1/-1"><label for="tf-ge">Garantía: qué no cubre</label><input id="tf-ge" value="${esc(t.garExcluye)}"></div>
       <div class="field"><label for="tf-hor">Horario de atención</label><input id="tf-hor" value="${esc(t.horario)}" placeholder="Lunes a sábado, 9:00 a 18:00"></div>
     </div>

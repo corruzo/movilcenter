@@ -2627,8 +2627,8 @@ grant execute on function public.guardar_contrato(bigint, jsonb) to authenticate
 -- >>>>>>>>>> 18_garantia.sql
 -- =====================================================================
 --  Actualización 18 · Política de garantía de cada tienda
---  Tomada de la factura de Priority One. Cada tienda la puede cambiar en
---  Panel → Configuración. Aparece en la ficha de cada equipo, en los
+--  Tomada de la factura de Priority One. Es la misma para las dos tiendas;
+--  se cambia en Panel → Configuración (desde cualquiera de los dos paneles). Aparece en la ficha de cada equipo, en los
 --  términos y condiciones y en el contrato.
 --  Ejecutar DESPUÉS de 17_frecuencia_y_contrato.sql. Se puede ejecutar más de una vez.
 -- =====================================================================
@@ -2656,9 +2656,12 @@ begin
          horario = left(trim(coalesce(p->>'horario', horario)), 120),
          representante = left(trim(coalesce(p->>'representante', representante)), 80),
          rep_cedula = left(upper(trim(coalesce(p->>'rep_cedula', rep_cedula))), 20),
-         garantia_cubre = left(trim(coalesce(p->>'garantia_cubre', garantia_cubre)), 400),
-         garantia_excluye = left(trim(coalesce(p->>'garantia_excluye', garantia_excluye)), 400),
          datos_pago = coalesce(p->'datos_pago', datos_pago), actualizado_en = now()
    where id = t;
+  -- la garantía es la misma para las dos tiendas
+  if nullif(trim(coalesce(p->>'garantia_cubre', '')), '') is not null or nullif(trim(coalesce(p->>'garantia_excluye', '')), '') is not null then
+    update tiendas set garantia_cubre = left(trim(coalesce(nullif(trim(p->>'garantia_cubre'), ''), garantia_cubre)), 400),
+                       garantia_excluye = left(trim(coalesce(nullif(trim(p->>'garantia_excluye'), ''), garantia_excluye)), 400);
+  end if;
   perform _log('Datos de la tienda actualizados');
 end $$;
