@@ -11,7 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16 y 17) para ejecutarlo de una sola vez. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 y 18) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -20,6 +20,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
 | `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
 | `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
+| `supabase/18_garantia.sql` | Política de garantía de cada tienda (se edita en Configuración). |
 | `supabase/17_frecuencia_y_contrato.sql` | El cliente elige semanal o quincenal (según lo que permita cada equipo), términos antes de comprar y contrato imprimible. |
 | `supabase/16_pagos_usados_frecuencia.sql` | Pago móvil, transferencia, efectivo y USDT; equipos usados (batería, garantía); cuotas semanales o quincenales. |
 | `supabase/15_sin_cupo.sql` | Sin límite de monto para financiar. |
@@ -44,7 +45,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
 2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
-   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16 y 17. Se pueden ejecutar más de una vez sin dañar nada.)
+   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 y 18. Se pueden ejecutar más de una vez sin dañar nada.)
 3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
 

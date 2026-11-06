@@ -161,7 +161,9 @@ function mapCfg(c){
 function mapStore(t){
   const ini = String(t.nombre||'').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).map(w=>/^one$/i.test(w)?'1':w[0]).join('').slice(0,2).toUpperCase();
   return { id:t.id, slug:t.slug, name:t.nombre, short:ini||'T', logo:t.logo_url||'', color:t.color||'#D2AE3E', slogan:t.eslogan||'',
-    frases:Array.isArray(t.frases)?t.frases:[], cuotas:t.acepta_cuotas!==false, whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{}, rep:t.representante||'', repCed:t.rep_cedula||'' };
+    frases:Array.isArray(t.frases)?t.frases:[], cuotas:t.acepta_cuotas!==false, whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{}, rep:t.representante||'', repCed:t.rep_cedula||'',
+    garCubre:t.garantia_cubre||'60 días por fallas ocultas (bocina, cámaras, pantalla y pin de carga).',
+    garExcluye:t.garantia_excluye||'Equipos que ingresen mojados, quemados, partidos, con caídas o manipulados por otro técnico sin nuestra autorización.' };
 }
 function mapProduct(p){
   return { id:p.id, store:p.tienda_id||1, brand:p.marca, name:p.nombre, cat:p.categoria, shape:p.forma, price:+p.precio, stock:p.stock,
@@ -299,7 +301,7 @@ const FREQ = {semanal:'semanales', quincenal:'quincenales', mensual:'mensuales'}
 const venceCuota = (freq, k, base=S.today) => freq==='semanales'||freq==='semanal' ? addDays(base, 7*k) : freq==='quincenales'||freq==='quincenal' ? addDays(base, 15*k) : addMonths(base, k);
 const pFreq = p => FREQ[pOpts(p)[0]?.f] || 'quincenales';
 // etiqueta de estado del equipo: "Usado · batería 90% · garantía 2 meses"
-const condTxt = p => [p.cond==='usado'?'Usado':'Nuevo', p.bat?`batería ${p.bat}%`:'', p.gar?`garantía ${p.gar} ${p.gar==1?'mes':'meses'}`:''].filter(Boolean).join(' · ');
+const condTxt = p => [p.cond==='usado'?'Usado':'Nuevo', p.bat?`batería ${p.bat}%`:''].filter(Boolean).join(' · ');
 // para un pedido con varios equipos: la inicial más alta y las cuotas que todos permiten
 const cartFin = items => { const ps = items.map(i=>P(i.pid)).filter(Boolean);
   // frecuencias que todos los equipos del carrito permiten, con el mismo número de cuotas
@@ -603,7 +605,8 @@ function vProducto(){
       <button class="soldby" data-act="tienda" data-v="${p.store}">Vendido por ${storeChip(p.store)}</button>
       <span class="brandname">${esc(p.brand)} · Código ${String(p.id).padStart(4,'0')}</span>${p.fin?'<span class="tag ok" style="justify-self:start">Contado o cuotas</span>':'<span class="tag dark" style="justify-self:start">Solo contado</span>'}
       <h1>${esc(p.name)}${p.storages?' '+esc(p.storages[pd.storage].n):''}</h1>
-      <div class="condbox"><span class="tag ${p.cond==='usado'?'warn':'ok'}">${p.cond==='usado'?'Usado':'Nuevo'}</span>${p.bat?`<span>Batería <b>${p.bat}%</b></span>`:''}${p.gar?`<span>Garantía <b>${p.gar} ${p.gar==1?'mes':'meses'}</b> por fallas ocultas</span>`:''}</div>
+      <div class="condbox"><span class="tag ${p.cond==='usado'?'warn':'ok'}">${p.cond==='usado'?'Usado':'Nuevo'}</span>${p.bat?`<span>Batería <b>${p.bat}%</b></span>`:''}</div>
+      <div class="note small"><b>Garantía:</b> ${esc(ST(p.store).garCubre)} <span class="muted">No cubre: ${esc(ST(p.store).garExcluye.replace(/\.$/,'').toLowerCase())}.</span></div>
       <div><span class="pr num">${usd(price)}</span><div class="muted small">${bs(price*S.cfg.tasa)} a la tasa del día</div></div>
       <div><h4 style="margin-bottom:8px">Color: <span class="muted" style="font-weight:500">${esc(p.colors[pd.color]?.n)}</span></h4>
         <div class="opts">${p.colors.map((c,i)=>`<button class="sw" style="background:${esc(c.hex)}" data-act="pcolor" data-i="${i}" aria-pressed="${pd.color===i}" aria-label="${esc(c.n)}"></button>`).join('')}</div></div>
@@ -783,12 +786,12 @@ function vNuevaClave(){
 
 // términos y condiciones de compra (y del financiamiento, si la tienda vende en cuotas)
 function terminosHTML(t){
-  const fin = t.cuotas, gar = 'fallas ocultas de teclado, bocinas, cámara, puerto de carga y pantalla';
+  const fin = t.cuotas;
   return `<div class="terms-txt">
     <h3>Al comprar en ${esc(t.name)}</h3>
     <ol>
-      <li><b>Equipos nuevos y usados.</b> En la ficha de cada teléfono se indica si es nuevo o usado, el estado de la batería y los meses de garantía.</li>
-      <li><b>Garantía.</b> Cubre ${gar}, durante el tiempo indicado en la ficha del equipo. <b>No aplica</b> a equipos mojados, quemados o con la pantalla o la tapa partida.</li>
+      <li><b>Equipos nuevos y usados.</b> En la ficha de cada teléfono se indica si es nuevo o usado y el estado de la batería.</li>
+      <li><b>Garantía.</b> ${esc(t.garCubre)} <b>No se aceptan como garantía:</b> ${esc(t.garExcluye.charAt(0).toLowerCase()+t.garExcluye.slice(1))}</li>
       <li><b>Revisión al entregar.</b> El equipo se revisa contigo al momento de la entrega (pantalla, cornetas, Face ID, pin de carga, botones y liberación).</li>
       <li><b>Pagos.</b> Pago móvil, transferencia, USDT (Binance) o efectivo. Los pagos con comprobante se verifican antes de enviar el equipo. El efectivo lo registra la tienda cuando lo recibe.</li>
       <li><b>Reserva.</b> Tus productos quedan reservados ${S.cfg.reservaHoras} horas mientras se confirma el pago; si no se paga, el pedido se cancela.</li>
@@ -1030,7 +1033,6 @@ function contratoModal(cid){
       <div class="field"><label for="ct-col">Color</label><input id="ct-col" value="${esc(k.color||it.color||'')}"></div>
       <div class="field"><label for="ct-cap">Almacenamiento</label><input id="ct-cap" value="${esc(k.capacidad||it.storage||'')}"></div>
       <div class="field"><label for="ct-bat">Batería (%)</label><input id="ct-bat" inputmode="numeric" data-digits="3" value="${esc(k.bateria||pr.bat||'')}"></div>
-      <div class="field"><label for="ct-gar">Garantía (meses)</label><input id="ct-gar" inputmode="numeric" data-digits="2" value="${esc(k.garantia||pr.gar||2)}"></div>
       <div class="field"><label for="ct-pz">Piezas cambiadas <span class="muted">(opcional)</span></label><input id="ct-pz" value="${esc(k.piezas||'')}" placeholder="Ej. pantalla"></div>
       <div class="err" id="ct-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="contratook">Guardar e imprimir</button>`);
@@ -1053,7 +1055,7 @@ function contratoHTML(c, k){
     <h3>CLÁUSULAS</h3>
     <p><b>PRIMERA.</b> “LA PARTE VENDEDORA” vende a “LA PARTE COMPRADORA”, quien adquiere para sí el equipo descrito en la declaración I, inciso a), el cual será entregado a “LA PARTE COMPRADORA” y seguirá siendo propiedad de “LA PARTE VENDEDORA” hasta que se completen todos los pagos. “LA PARTE COMPRADORA” deberá cumplir con su financiamiento hasta la fecha acordada; al tener más de tres (3) cuotas vencidas sin pagar, el equipo será devuelto a “LA PARTE VENDEDORA” y “LA PARTE COMPRADORA” perderá todo dominio sobre él.</p>
     <p><b>SEGUNDA.</b> Si “LA PARTE COMPRADORA” se retrasa en el pago de alguna de sus cuotas, a dicha cuota se le sumarán <b>${usd(S.cfg.mora)}</b> por mora.</p>
-    <p><b>TERCERA. Garantía.</b> El equipo tiene una garantía de <b>${esc(k.garantia||'2')} ${+k.garantia===1?'mes':'meses'}</b> por fallas ocultas (teclado, bocinas, cámara, puerto y pantalla). No se aceptan equipos que ingresen mojados, quemados o con la pantalla o la tapa partida.</p>
+    <p><b>TERCERA. Garantía.</b> El equipo tiene una garantía de ${esc(t.garCubre.charAt(0).toLowerCase()+t.garCubre.slice(1))} No se aceptan como garantía: ${esc(t.garExcluye.charAt(0).toLowerCase()+t.garExcluye.slice(1))}</p>
     <h3>REVISIÓN DEL EQUIPO ANTES DE SU ENTREGA</h3>
     <table class="rev">${['Pantalla','Cornetas','Face ID','Pin de carga','Botones','Liberación'].map(x=>`<tr><td>${x}:</td><td>${linea}</td></tr>`).join('')}<tr><td>Piezas cambiadas:</td><td>${k.piezas?esc(k.piezas):linea}</td></tr></table>
     <p class="muted-p">Crédito ${c.code} · Pedido ${esc(o.code||'')} · ${hoy}</p>
@@ -1179,7 +1181,7 @@ function productModal(id){
       ${p?'':`<div class="field"><label for="pf-stk">Unidades disponibles</label><input id="pf-stk" inputmode="numeric" data-digits="4" value="1"></div>`}
       <div class="field"><label for="pf-cond">Condición</label><select id="pf-cond"><option value="nuevo" ${p?.cond!=='usado'?'selected':''}>Nuevo</option><option value="usado" ${p?.cond==='usado'?'selected':''}>Usado</option></select></div>
       <div class="field"><label for="pf-bat">Batería (%) <span class="muted">(opcional)</span></label><input id="pf-bat" inputmode="numeric" data-digits="3" value="${p?.bat??''}" placeholder="Ej. 90"></div>
-      <div class="field"><label for="pf-gar">Garantía (meses) <span class="muted">(opcional)</span></label><input id="pf-gar" inputmode="numeric" data-digits="2" value="${p?.gar??''}" placeholder="Ej. 2"></div>
+      <div class="field" hidden><label for="pf-gar">Garantía</label><input id="pf-gar" inputmode="numeric" data-digits="2" value="${p?.gar??''}" placeholder="Ej. 2"></div>
       <div class="field"><label for="pf-col">Colores <span class="muted">(separados por coma)</span></label><input id="pf-col" value="${esc(p?p.colors.map(c=>c.n).join(', '):'')}" placeholder="Ej. Negro, Titanio, Blanco"></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-cap">Capacidades <span class="muted">(opcional; precio extra con +)</span></label><input id="pf-cap" value="${esc(capTxt)}" placeholder="Ej. 256 GB, 512 GB +150"></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-spe">Especificaciones <span class="muted">(una por línea: nombre: valor)</span></label><textarea id="pf-spe" rows="4">${esc(specTxt)}</textarea></div>
@@ -1226,7 +1228,7 @@ async function saveProduct(){
     descripcion:$('#pf-des').value.trim(), imagen_url:imagen, financiable:$('#pf-fin')?$('#pf-fin').checked:false, activo:$('#pf-act').checked};
   const bat = $('#pf-bat').value.trim(), gar = $('#pf-gar').value.trim();
   if(bat && !(+bat>=1 && +bat<=100)){ err.textContent = 'La batería debe estar entre 1 y 100%.'; return; }
-  const equipo = {condicion:$('#pf-cond').value, bateria:bat, garantia_meses:gar};
+  const equipo = {condicion:$('#pf-cond').value, bateria:bat, garantia_meses:''};
   if($('#pf-cs')){ equipo.cuotas_semanal = $('#pf-cs').value; equipo.cuotas_quincenal = $('#pf-cq').value;
     if($('#pf-fin').checked && !equipo.cuotas_semanal && !equipo.cuotas_quincenal){ err.textContent = 'Permite cuotas semanales, quincenales o ambas, o desmarca “Se puede pagar en cuotas”.'; return; } }
   let finIni = null, finPlans = null;
@@ -1257,6 +1259,8 @@ function aConfig(){
       <div class="field"><label for="tf-rif">RIF</label><input id="tf-rif" value="${esc(t.rif)}" placeholder="J-12345678-9"></div>
       <div class="field"><label for="tf-rep">Representante (firma los contratos)</label><input id="tf-rep" value="${esc(t.rep)}" placeholder="Nombre y apellido"></div>
       <div class="field"><label for="tf-repc">Cédula del representante</label><input id="tf-repc" value="${esc(t.repCed)}" placeholder="V-12345678"></div>
+      <div class="field" style="grid-column:1/-1"><label for="tf-gc">Garantía: qué cubre</label><input id="tf-gc" value="${esc(t.garCubre)}"></div>
+      <div class="field" style="grid-column:1/-1"><label for="tf-ge">Garantía: qué no cubre</label><input id="tf-ge" value="${esc(t.garExcluye)}"></div>
       <div class="field"><label for="tf-hor">Horario de atención</label><input id="tf-hor" value="${esc(t.horario)}" placeholder="Lunes a sábado, 9:00 a 18:00"></div>
     </div>
     <h3>Frases de la portada</h3><p class="muted small" style="margin-top:-8px">Aparecen junto al teléfono animado al deslizar la página de inicio. Para resaltar en dorado escribe la palabra entre &lt;em&gt; y &lt;/em&gt;; para un salto de línea usa &lt;br&gt;.</p>
@@ -1955,7 +1959,7 @@ const ACT = {
   contratoprint: () => { try{ window.print(); }catch(e){ toast('No se pudo abrir la impresión. Usa Ctrl+P.'); } },
   contratook: () => run(async()=>{
     const err = $('#ct-err'); const v = id => $(id).value.trim();
-    const k = {imei1:v('#ct-i1'), imei2:v('#ct-i2'), modelo:v('#ct-mod'), color:v('#ct-col'), capacidad:v('#ct-cap'), bateria:v('#ct-bat'), garantia:v('#ct-gar'), piezas:v('#ct-pz')};
+    const k = {imei1:v('#ct-i1'), imei2:v('#ct-i2'), modelo:v('#ct-mod'), color:v('#ct-col'), capacidad:v('#ct-cap'), bateria:v('#ct-bat'), piezas:v('#ct-pz')};
     if(!/^\d{15}$/.test(k.imei1)){ err.textContent = 'El IMEI 1 debe tener 15 dígitos (márcalo *#06# en el teléfono).'; return; }
     if(k.imei2 && !/^\d{15}$/.test(k.imei2)){ err.textContent = 'El IMEI 2 debe tener 15 dígitos.'; return; }
     if(!k.modelo){ err.textContent = 'Escribe el equipo.'; return; }
@@ -2067,7 +2071,7 @@ document.addEventListener('submit', e=>{
     const datos = {}; f.querySelectorAll('[data-dp]').forEach(i=>datos[i.dataset.dp] = i.value.trim());
     const frases = [0,1].map(i=>({k:nom, t:$('#tf-ft'+i).value.trim(), p:$('#tf-fp'+i).value.trim()})).filter(x=>x.t||x.p);
     let logo = t.logo; if(S.logoFile){ logo = await uploadPublic(await compressImg(S.logoFile, 600), 'logos'); }
-    await rpc('actualizar_tienda', {p:{id:sid, nombre:nom, eslogan:$('#tf-esl').value.trim(), frases, logo_url:logo, whatsapp:wa, correo:$('#tf-cor').value.trim(), rif:$('#tf-rif').value.trim(), representante:$('#tf-rep').value.trim(), rep_cedula:$('#tf-repc').value.trim(), direccion:'', horario:$('#tf-hor').value.trim(), datos_pago:datos}});
+    await rpc('actualizar_tienda', {p:{id:sid, nombre:nom, eslogan:$('#tf-esl').value.trim(), frases, logo_url:logo, whatsapp:wa, correo:$('#tf-cor').value.trim(), rif:$('#tf-rif').value.trim(), representante:$('#tf-rep').value.trim(), rep_cedula:$('#tf-repc').value.trim(), garantia_cubre:$('#tf-gc').value.trim(), garantia_excluye:$('#tf-ge').value.trim(), direccion:'', horario:$('#tf-hor').value.trim(), datos_pago:datos}});
     S.logoFile = null; await refresh(); toast('Datos de la tienda guardados.');
   });
 });
