@@ -1,6 +1,6 @@
 -- =====================================================================
 --  Priority One y Papa's Store · INSTALACIÓN COMPLETA
---  Contiene, en orden: 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18 y 19.
+--  Contiene, en orden: 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 y 20.
 --  Pégalo completo en Supabase > SQL Editor > New query y pulsa Run.
 --  (El cierre diario va aparte: 03_tarea_diaria.sql)
 -- =====================================================================
@@ -2686,3 +2686,15 @@ end $$;
 drop trigger if exists zz_sexo_usuario on auth.users;
 create trigger zz_sexo_usuario after insert on auth.users for each row execute function public._sexo_usuario();
 revoke execute on function public._sexo_usuario() from public, anon, authenticated;
+
+-- >>>>>>>>>> 20_historial_cierre.sql
+-- =====================================================================
+--  Actualización 20 · El cierre diario aparece en el "Historial de cambios"
+--  Los registros automáticos del sistema (cierre diario, moras aplicadas)
+--  no pertenecen a una tienda; ahora los ven los administradores de ambas.
+--  Ejecutar DESPUÉS de 19_sexo.sql. Se puede ejecutar más de una vez.
+-- =====================================================================
+drop policy if exists ver_bitacora on public.bitacora;
+create policy ver_bitacora on public.bitacora for select using (
+  es_admin_general()
+  or (es_admin() and (tienda_id = mi_tienda_admin() or (tienda_id is null and actor = 'Sistema'))));
