@@ -11,7 +11,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
 | `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
 | `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21 y 22) para ejecutarlo de una sola vez. |
+| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22 y 23) para ejecutarlo de una sola vez. |
 | `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
 | `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
@@ -23,6 +23,7 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 | `supabase/20_historial_cierre.sql` | El cierre diario se ve en el Historial de cambios de cada panel. |
 | `supabase/21_gama_accesorios_bs.sql` | Gama (baja/media/alta), condición Clase A/B/C, accesorios opcionales con precio extra, ajuste para pagos en bolívares, inicial general de 30% y Papa's Store puede consultar el financiamiento de Priority One. |
 | `supabase/22_seguridad.sql` | Refuerzo de seguridad: RLS activo en todas las tablas, sin escritura directa, visitantes solo ven catálogo y tiendas, funciones internas cerradas y archivos privados. |
+| `supabase/23_produccion_tasa_por_tienda.sql` | Acabado de producción: tasa y ajuste en Bs por tienda con historial, reglas de financiamiento solo para la tienda de cuotas, sin datos de ejemplo y registro de la aceptación de los Términos de uso y la Política de privacidad. |
 | `supabase/19_sexo.sql` | Sexo del cliente (masculino o femenino) en el registro. |
 | `supabase/18_garantia.sql` | Política de garantía de cada tienda (se edita en Configuración). |
 | `supabase/17_frecuencia_y_contrato.sql` | El cliente elige semanal o quincenal (según lo que permita cada equipo), términos antes de comprar y contrato imprimible. |

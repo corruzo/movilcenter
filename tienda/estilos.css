@@ -706,3 +706,52 @@ nav.cats .tasa b{color:var(--gold-l);font-weight:700}
 .filebtn .fn.ok{color:var(--ok);font-weight:600}
 .filebtn:hover{border-color:var(--brand-2)}
 .filebtn:focus-within{outline:2px solid var(--brand-2);outline-offset:2px}
+
+/* ---------- producción: confianza, ayuda, barra de compra, WhatsApp ---------- */
+footer .cols{grid-template-columns:1.3fr repeat(4,1fr)}
+@media (max-width:1000px){footer .cols{grid-template-columns:1fr 1fr}}
+.trust{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px;color:var(--muted)}
+.trust li{display:inline-flex;align-items:center;gap:6px}
+.trust svg.i{width:16px;height:16px;color:var(--ok)}
+.pdp-help{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--soft)}
+.pdp-help>svg.i{color:var(--ok);width:24px;height:24px}
+.pdp-help div{flex:1;display:grid;font-size:14px}
+.pdp-help div span{color:var(--muted);font-size:13px}
+.buybar{display:none}
+@media (max-width:720px){
+  .buybar{display:flex;align-items:center;justify-content:space-between;gap:12px;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--white);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 18px rgba(0,0,0,.08)}
+  .buybar div{display:grid;line-height:1.2}.buybar b{font-size:18px}
+  body:has(.buybar) #app{padding-bottom:84px}
+  body:has(.buybar) #fabwa{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+}
+#fabwa{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:45;display:grid;justify-items:end;gap:10px}
+#fabwa[hidden]{display:none}
+.fab-b{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:12px 18px;background:#1FA855;color:#fff;font:600 15px var(--f-body);box-shadow:0 8px 22px rgba(0,0,0,.22);cursor:pointer}
+.fab-b svg.i{width:20px;height:20px}
+.fab-b:hover{background:#178a45}
+.fab-m{background:var(--white);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:12px;display:grid;gap:6px;min-width:260px;max-width:calc(100vw - 32px)}
+.fab-m>b{font-size:14px;padding:2px 4px 6px}
+.fab-m a{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;color:var(--ink);text-decoration:none}
+.fab-m a:hover{background:var(--soft)}
+.fab-m a span{display:grid;font-size:14px}.fab-m a small{color:var(--muted);font-size:12px}
+@media (max-width:520px){.fab-b span{display:none}.fab-b{padding:14px}}
+
+/* ---------- páginas legales ---------- */
+.legal{display:grid;grid-template-columns:260px 1fr;gap:28px;align-items:start;margin-bottom:32px}
+.legal-toc{position:sticky;top:calc(var(--hh,120px) + 12px);font-size:14px;display:grid;gap:8px}
+.legal-toc ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.legal-toc button{background:none;border:0;padding:2px 0;text-align:left;color:var(--ink);cursor:pointer;font:inherit}
+.legal-toc button:hover{color:var(--brand-2);text-decoration:underline}
+.legal-alt{border-top:1px solid var(--line);padding-top:8px}
+.legal-body{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:28px 32px;max-width:860px;line-height:1.6}
+.legal-body h1{margin-bottom:4px}
+.legal-body .lead-s{font-size:17px;margin:16px 0 8px}
+.legal-body section{padding-top:18px;margin-top:18px;border-top:1px solid var(--line);scroll-margin-top:calc(var(--hh,120px) + 16px)}
+.legal-body h2{font-size:19px;margin-bottom:8px}
+.legal-body h2 .num{color:var(--gold-d)}
+.legal-body ul{padding-left:20px;display:grid;gap:6px;margin:8px 0}
+.legal-body p{margin:8px 0}
+.legal-body .two{gap:14px}
+.legal-who td,.legal-who th{vertical-align:top}
+@media (max-width:900px){.legal{grid-template-columns:minmax(0,1fr)}.legal>*{min-width:0}.legal-toc{position:static}.legal-body{padding:20px 18px}}
+.ck span .link{font-size:inherit}

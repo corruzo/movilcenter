@@ -28,6 +28,7 @@ const ICO = {
   cart:'<path d="M3 4h2l2.4 11h11l2-8H6.2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/>',
   bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
   truck:'<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   card:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
   store:'<path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6"/>',
@@ -148,7 +149,15 @@ const admStoreId = () => myStore() ?? (S.admStore || null);
 const admCuo = () => { const t = admStoreId(); return t==null || ST(t).cuotas; };
 const unitPrice = (p, si=0, acc=false) => p.price + (p.storages && p.storages[si] ? +p.storages[si].d || 0 : 0) + (acc && p.acc!=null ? p.acc : 0);
 // precio en bolívares: el precio en dólares, más el ajuste para pagos en Bs, a la tasa
-const bsPrice = u => r2(u*(1+(S.cfg.recargoBs||0))*S.cfg.tasa);
+// cada tienda publica su tasa y su ajuste para pagos en bolívares; sin tasa no se cobra en Bs
+const tasaOk = store => !!ST(store).tasa;
+const bsPrice = (u, store) => { const t = ST(store); return t.tasa ? r2(u*(1+(t.recargoBs||0))*t.tasa) : null; };
+const bsTxt = (u, store) => { const v = bsPrice(u, store); return v==null ? 'por confirmar' : bs(v); };
+// métodos que la tienda tiene configurados (y los de bolívares solo si publicó su tasa)
+const storeMethods = store => { const t = ST(store), d = t.pay || {};
+  const l = Object.keys(METODOS).filter(k => (d[k]||'').trim() && (METODOS[k].cur!=='Bs' || t.tasa));
+  return l.length ? l : ['efectivo']; };
+const LEGAL_VERSION = '2026-11';
 
 function loadCart(){ try{ const c = JSON.parse(localStorage.getItem('carrito') || '[]'); return Array.isArray(c) ? c : []; }catch(e){ return []; } }
 function saveCart(){ try{ localStorage.setItem('carrito', JSON.stringify(S.cart)); }catch(e){} }
@@ -165,6 +174,7 @@ function mapStore(t){
   const ini = String(t.nombre||'').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).map(w=>/^one$/i.test(w)?'1':w[0]).join('').slice(0,2).toUpperCase();
   return { id:t.id, slug:t.slug, name:t.nombre, short:ini||'T', logo:t.logo_url||'', color:t.color||'#D2AE3E', slogan:t.eslogan||'',
     frases:Array.isArray(t.frases)?t.frases:[], cuotas:t.acepta_cuotas!==false, whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{}, rep:t.representante||'', repCed:t.rep_cedula||'',
+    tasa:t.tasa!=null&&+t.tasa>0?+t.tasa:null, recargoBs:+(t.recargo_bs||0), tasaAt:t.tasa_actualizada_en?new Date(t.tasa_actualizada_en):null,
     garCubre:t.garantia_cubre||'60 días por fallas ocultas (bocina, cámaras, pantalla y pin de carga).',
     garExcluye:t.garantia_excluye||'Equipos que ingresen mojados, quemados, partidos, con caídas o manipulados por otro técnico sin nuestra autorización.' };
 }
@@ -179,7 +189,7 @@ function mapProduct(p){
 function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, sexo:u.sexo||'', cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
   verif:u.verificacion || (u.rol==='admin'?'verificado':'incompleto'), verifNota:u.verificacion_nota||'', nac:u.fecha_nacimiento||'', estadoVzla:u.estado_vzla||'', ocup:u.ocupacion||'', trabajo:u.lugar_trabajo||'',
   ingreso:u.ingreso_rango||'', refNom:u.ref_nombre||'', refTel:u.ref_telefono||'', refPar:u.ref_parentesco||'', cedulaFoto:u.cedula_foto||'', selfieFoto:u.selfie_foto||'',
-  lat:u.ubic_lat!=null?+u.ubic_lat:null, lng:u.ubic_lng!=null?+u.ubic_lng:null, acc:u.ubic_precision}; }
+  legalAt:u.legal_aceptado_en?new Date(u.legal_aceptado_en):null, legalV:u.legal_version||'', lat:u.ubic_lat!=null?+u.ubic_lat:null, lng:u.ubic_lng!=null?+u.ubic_lng:null, acc:u.ubic_precision}; }
 
 /* ===================== carga de datos ===================== */
 async function q(table, order){
@@ -228,6 +238,7 @@ async function loadPrivate(){
   catch(e){ S.encs = []; }
   if(S.me.role==='admin'){
     const bt = await q('bitacora',['id',false]);
+    try{ S.tasas = (await q('tasas_historial',['id',false])).map(h=>({store:h.tienda_id, tasa:+h.tasa, rec:+h.recargo_bs, by:h.actor, at:new Date(h.creado_en)})); }catch(e){ S.tasas = []; }
     S.audit = bt.slice(0,400).map(a=>({at:new Date(a.creado_en), by:a.actor, msg:a.accion, store:a.tienda_id}));
     try{ S.posts = (await q('postulaciones',['id',false])).map(p=>({id:p.id, store:p.tienda_id, codigo:p.codigo, nombre:p.nombre, cedula:p.cedula, telefono:p.telefono, ciudad:p.ciudad, respuestas:p.respuestas||{}, estado:p.estado, nota:p.nota, creado:new Date(p.creado_en)})); }
     catch(e){ S.posts = []; }
@@ -310,8 +321,8 @@ const GAMAS = {baja:'Gama baja', media:'Gama media', alta:'Gama alta'};
 const condN = p => CONDS[p.cond] || 'Nuevo';
 const condTxt = p => [condN(p), p.bat?`batería ${p.bat}%`:''].filter(Boolean).join(' · ');
 // el mismo monto en bolívares y en dólares; el método elegido queda resaltado
-const dualBox = (amt, method) => { const isBs = METODOS[method]?.cur==='Bs'; return `<div class="dual">
-  <div class="${isBs?'on':''}"><span>En bolívares<small>Pago móvil o transferencia</small></span><b class="num">${bs(bsPrice(amt))}</b></div>
+const dualBox = (amt, method, store) => { const isBs = METODOS[method]?.cur==='Bs'; if(!tasaOk(store)) return `<div class="dual"><div class="on"><span>Monto a pagar<small>USDT o efectivo</small></span><b class="num">${usd(amt)}</b></div><div><span>En bolívares<small>Pago móvil o transferencia</small></span><b class="num muted">Pronto</b></div><p>Por ahora esta compra se paga en dólares (USDT o efectivo). Si prefieres pagar en bolívares, escríbenos por WhatsApp.</p></div>`; return `<div class="dual">
+  <div class="${isBs?'on':''}"><span>En bolívares<small>Pago móvil o transferencia</small></span><b class="num">${bs(bsPrice(amt, store))}</b></div>
   <div class="${isBs?'':'on'}"><span>En dólares<small>USDT o efectivo</small></span><b class="num">${usd(amt)}</b></div>
   <p><b>Importante:</b> el monto en bolívares y el monto en dólares son distintos. Paga el que corresponde al método que elegiste.</p></div>`; };
 // para un pedido con varios equipos: la inicial más alta y las cuotas que todos permiten
@@ -366,6 +377,18 @@ function track(o){
     const label = i===cur && o.st==='pago_rechazado' ? 'Pago rechazado' : i===cur && o.st==='pendiente_pago' ? 'Esperando pago' : i===cur && ['pago_en_revision','credito_en_evaluacion'].includes(o.st) ? (fin?'En evaluación':'Verificando pago') : s;
     return `<span class="${cls}">${label}</span>`;}).join('')}</div>`;
 }
+const modoN = t => t.cuotas ? 'Compras en cuotas' : 'Compras de contado';
+// botón flotante de WhatsApp: el cliente elige con quién hablar según cómo quiere comprar
+function renderFab(){
+  let el = $('#fabwa'); const list = S.stores.filter(t=>t.whatsapp);
+  const hide = !list.length || ['admin','checkout'].includes(S.route.v) || isAdmin();
+  if(!el){ el = document.createElement('div'); el.id = 'fabwa'; document.body.appendChild(el); }
+  el.hidden = hide; if(hide) return;
+  const pst = S.route.v==='producto' && P(S.route.id) ? P(S.route.id).store : null;
+  const opts = pst ? list.filter(t=>t.id===pst) : list;
+  el.innerHTML = `${S.fab?`<div class="fab-m" role="menu"><b>¿Cómo podemos ayudarte?</b>${opts.map(t=>`<a role="menuitem" href="${waLink(pst?`Hola, quiero información sobre el ${P(S.route.id).name}.`:'Hola, quiero información sobre un teléfono.', t.id)}" target="_blank" rel="noopener">${storeMark(t,26)}<span><b>${modoN(t)}</b><small>${esc(t.name)}${t.horario?' · '+esc(t.horario):''}</small></span></a>`).join('')}</div>`:''}
+    <button class="fab-b" data-act="fabwa" aria-expanded="${!!S.fab}" aria-label="Escríbenos por WhatsApp">${ico('chat')}<span>${S.fab?'Cerrar':'Escríbenos'}</span></button>`;
+}
 function logoHTML(){
   return `<span class="duo">${S.stores.map(t=>`<span class="duo-i">${storeMark(t,32)}<b>${esc(t.name)}</b></span>`).join('<span class="duo-x" aria-hidden="true">×</span>')}</span>`;
 }
@@ -391,12 +414,13 @@ function renderChrome(){
     + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">${cu.length>1?'Todo el catálogo':'Catálogo'}</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
   $('#foot').innerHTML = `<div class="wrap cols">
       <div><div class="logo">${logoHTML()}</div>
-        <p style="margin-top:10px;max-width:34ch">Dos tiendas, una sola cuenta. ${finStores().map(t=>esc(t.name)).join(' y ')} vende en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado.</p></div>
-      <div><h4>Ayuda</h4><ul><li><button data-act="go" data-v="financiamiento">Cómo funciona el financiamiento</button></li><li><button data-act="go" data-v="terminos">Términos y condiciones</button></li><li><button data-act="acct" data-v="pedidos">Seguir mi pedido</button></li><li><button data-act="acct" data-v="creditos">Pagar una cuota</button></li><li><button data-act="go" data-v="trabaja">Trabaja con nosotros</button></li></ul></div>
-      ${S.stores.map(t=>{ const wa = waLink('Hola, quiero información sobre un equipo.', t.id); return `<div><h4>${esc(t.name)}</h4><ul>
-        <li>Tienda online · envíos a todo el país</li>${t.horario?`<li>Atención: ${esc(t.horario)}</li>`:''}
+        <p style="margin-top:10px;max-width:36ch">Teléfonos originales con garantía, en cuotas o de contado. Pagas desde tu cuenta y te lo enviamos a todo el país.</p></div>
+      <div><h4>Ayuda</h4><ul><li><button data-act="go" data-v="financiamiento">Cómo funciona el financiamiento</button></li><li><button data-act="acct" data-v="pedidos">Seguir mi pedido</button></li><li><button data-act="acct" data-v="creditos">Pagar una cuota</button></li><li><button data-act="go" data-v="trabaja">Trabaja con nosotros</button></li></ul></div>
+      <div><h4>Legal</h4><ul><li><button data-act="go" data-v="terminos">Términos de uso</button></li><li><button data-act="go" data-v="privacidad">Política de privacidad</button></li><li><button data-act="legal" data-v="terminos" data-s="garantia">Garantía</button></li><li><button data-act="legal" data-v="terminos" data-s="compras">Condiciones de compra</button></li></ul></div>
+      ${S.stores.map(t=>{ const wa = waLink('Hola, quiero información sobre un equipo.', t.id); return `<div><h4>${modoN(t)}</h4><ul>
+        <li><b>${esc(t.name)}</b></li>${t.horario?`<li>Atención: ${esc(t.horario)}</li>`:''}
         ${wa?`<li><a class="wa" style="color:var(--gold-l)" href="${wa}" target="_blank" rel="noopener">${ico('chat')} WhatsApp</a></li>`:''}${t.correo?`<li>${esc(t.correo)}</li>`:''}${t.rif?`<li>RIF ${esc(t.rif)}</li>`:''}
-        <li><button data-act="tienda" data-v="${t.id}">Ver su catálogo</button></li></ul></div>`; }).join('')}
+        <li><button data-act="tienda" data-v="${t.id}">${t.cuotas?'Ver equipos en cuotas':'Ver equipos de contado'}</button></li></ul></div>`; }).join('')}
     </div>
     <div class="wrap bot"><span>© ${new Date().getFullYear()} ${esc(BRAND.legal || siteName())}. Todos los derechos reservados.</span></div>`;
 }
@@ -414,8 +438,8 @@ function storyHTML(){
   <div class="stage" id="stage">
     <canvas class="dust" id="dust" aria-hidden="true"></canvas>
     <div class="hero-copy" id="hero">
-      <span class="eyebrow">${S.stores.map(t=>esc(t.name)).join(' · ')}</span>
-      <h1>${['Cuotas','o','contado.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Tú','eliges','la','tienda.'].map((w,i)=>`<span class="w g" style="animation-delay:${.35+i*.09}s">${w}</span>`).join(' ')}</em></h1>
+      <span class="eyebrow">Teléfonos originales · Garantía · Envíos a todo el país</span>
+      <h1>${['Cuotas','o','contado.'].map((w,i)=>`<span class="w" style="animation-delay:${.05+i*.09}s">${w}</span>`).join(' ')} <em>${['Tú','decides','cómo','pagar.'].map((w,i)=>`<span class="w g" style="animation-delay:${.35+i*.09}s">${w}</span>`).join(' ')}</em></h1>
       <ul class="hero-st">${S.stores.map(t=>`<li>${storeMark(t,26)}<div><b>${esc(t.name)}</b><span class="lg">${t.cuotas?'Das una inicial y el resto lo pagas en cuotas. También de contado.':'Solo de contado: pagas el precio completo, sin recargos.'}</span><span class="sh">${t.cuotas?'cuotas o contado':'solo de contado'}</span></div></li>`).join('')}</ul>
       <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Comprar en cuotas':'Comprar de contado'} →</button>`).join('')}</div>
     </div>
@@ -439,25 +463,25 @@ function storyHTML(){
       </div>
     </div></div>
     ${says}
-    <div class="say final" data-r="0.80,1.01"><span class="k">Priority One · Papa's Store</span><h2>Dos tiendas,<br><em>una sola cuenta.</em></h2>
-      <p>${S.stores.map(t=>`${esc(t.name)}: ${t.cuotas?'en cuotas o de contado':'solo de contado'}`).join('. ')}. Usas la misma cuenta y cada tienda te atiende y despacha su pedido.</p>
-      <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">Ver ${esc(t.name)}</button>`).join('')}</div></div>
+    <div class="say final" data-r="0.80,1.01"><span class="k">Compra segura</span><h2>Pagas seguro,<br><em>lo recibes en casa.</em></h2>
+      <p>Cada pago queda registrado en tu cuenta, cada equipo tiene garantía y te atendemos por WhatsApp antes y después de la compra.</p>
+      <div class="row">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Ver equipos en cuotas':'Ver equipos de contado'}</button>`).join('')}</div></div>
     <div class="scroll-hint" id="hint"><i></i>Desliza para descubrirlo</div>
-    <nav class="progress" id="prog" aria-label="Partes de la presentación"><button data-go="0" aria-label="Inicio"></button><button data-go="0.18" aria-label="Primera tienda"></button><button data-go="0.35" aria-label="Segunda tienda"></button><button data-go="0.56" aria-label="Por dentro"></button><button data-go="0.9" aria-label="Tiendas"></button></nav>
+    <nav class="progress" id="prog" aria-label="Partes de la presentación"><button data-go="0" aria-label="Inicio"></button><button data-go="0.18" aria-label="En cuotas"></button><button data-go="0.35" aria-label="De contado"></button><button data-go="0.56" aria-label="Por dentro"></button><button data-go="0.9" aria-label="Tiendas"></button></nav>
   </div>
   </section>`;
 }
 function jobCard(inTrabaja){
   const pc = S.cfg.postulacion; if(!pc || pc.activo===false) return '';
   return `<section class="job">
-    <div><h2>¿Quieres vender con nosotros?</h2><p>${esc(siteName())} buscan personas para vender sus equipos por redes sociales y WhatsApp, a comisión. Completa el formulario y te escribimos.</p>
+    <div><h2>¿Quieres vender con nosotros?</h2><p>Buscamos personas para vender nuestros equipos por redes sociales y WhatsApp, a comisión. Completa el formulario y te escribimos.</p>
       <div class="row" style="margin-top:22px"><button class="btn buy" ${inTrabaja?'data-act="topost"':'data-act="go" data-v="trabaja"'}>Postularme</button></div></div>
     <ul><li>Trabajas desde tu teléfono, en tu horario</li><li>Ganas por cada venta que cierres</li><li>Te damos fotos, precios y planes de cuotas para compartir</li></ul>
   </section>`;
 }
 function vInicio(){
   const plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b), iniPct = Math.round(S.cfg.inicialMin*100);
-  const tick = [`Tienda <b>100% online</b>`, ...finStores().map(t=>`Cuotas en <b>${esc(t.name)}</b>`), ...cashStores().map(t=>`Contado en <b>${esc(t.name)}</b>`), `Tienda <b>confiable</b>`, `Envíos a <b>todo el país</b>`];
+  const tick = [`Equipos <b>originales</b>`, ...(finStores().length?[`Cuotas <b>semanales o quincenales</b>`]:[]), `Pago <b>de contado</b> sin recargos`, `Garantía en <b>cada equipo</b>`, `Envíos a <b>todo el país</b>`, `Atención por <b>WhatsApp</b>`];
   const hf = S.homeFin || '';
   const feat = S.products.filter(p=>p.stock>0 && (!hf || (hf==='si')===p.fin)).sort((a,b)=>(a.cat==='Teléfonos'?0:1)-(b.cat==='Teléfonos'?0:1)).slice(0,8);
   const cnt = f => S.products.filter(p=>!f || (f==='si')===p.fin).length;
@@ -465,16 +489,16 @@ function vInicio(){
   <div class="ticker" aria-hidden="true"><div class="track">${[...tick,...tick].map(t=>`<span>${t}</span>`).join('')}</div></div>
   <div class="dk">
   <section class="blk" id="tiendas"><div class="wrap">
-    <div class="reveal"><span class="eyebrow">Nuestras tiendas</span><h2 class="big">Elige dónde<br>comprar.</h2><p class="lead">${finStores().map(t=>esc(t.name)).join(' y ')} ${finStores().length>1?'venden':'vende'} en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')} ${cashStores().length>1?'venden':'vende'} de contado. Con la misma cuenta compras en las dos.</p></div>
+    <div class="reveal"><span class="eyebrow">Formas de comprar</span><h2 class="big">¿Cómo quieres<br>pagarlo?</h2><p class="lead">En cuotas, con una inicial y pagos semanales o quincenales, o de contado, pagando el precio completo sin recargos. Tú eliges.</p></div>
     <div class="stores">${S.stores.map(t=>{ const np = S.products.filter(p=>p.store===t.id).length; const wa = waLink('Hola, quiero información sobre un equipo.', t.id);
-      return `<article class="storecard reveal"><div class="sc-top">${storeMark(t,56)}<div><h3>${esc(t.name)}</h3><p>${esc(t.slogan)}</p></div></div>
-        <div class="sc-meta"><span class="tag ${t.cuotas?'ok':'dark'}">${t.cuotas?'Contado o cuotas':'Solo contado'}</span><span><b class="num">${np}</b> equipo${np===1?'':'s'}</span>${t.horario?`<span>${esc(t.horario)}</span>`:''}</div>
-        <div class="row"><button class="btn buy" data-act="tienda" data-v="${t.id}">Ver catálogo →</button>${wa?`<a class="btn ghost" href="${wa}" target="_blank" rel="noopener">${ico('chat')} WhatsApp</a>`:''}</div></article>`; }).join('')}</div>
+      return `<article class="storecard reveal"><div class="sc-top">${storeMark(t,56)}<div><h3>${t.cuotas?'En cuotas':'De contado'}</h3><p>${esc(t.slogan)} <span class="muted">· ${esc(t.name)}</span></p></div></div>
+        <div class="sc-meta"><span class="tag ${t.cuotas?'ok':'dark'}">${t.cuotas?'Inicial + cuotas, o contado':'Precio completo, sin recargos'}</span><span><b class="num">${np}</b> equipo${np===1?'':'s'}</span>${t.horario?`<span>${esc(t.horario)}</span>`:''}</div>
+        <div class="row"><button class="btn buy" data-act="tienda" data-v="${t.id}">${t.cuotas?'Ver equipos en cuotas':'Ver equipos de contado'} →</button>${wa?`<a class="btn ghost" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Hablar con un asesor</a>`:''}</div></article>`; }).join('')}</div>
   </div></section>
   <section class="blk" id="cuotas"><div class="wrap">
     <div class="reveal"><span class="eyebrow">Cómo comprar en cuotas${finStores().length===1?' en '+esc(finStores()[0].name):''}</span><h2 class="big">Tres pasos y<br>te lo llevas.</h2><p class="lead">Creas tu cuenta en un minuto y solo verificamos tu identidad si eliges pagar en cuotas.</p></div>
     <div class="steps">
-      <article class="step reveal"><span class="n">01</span><h3>Crea tu cuenta</h3><p>Nombre, cédula y teléfono, solo con números. Con eso ya compras de contado en las dos tiendas.</p></article>
+      <article class="step reveal"><span class="n">01</span><h3>Crea tu cuenta</h3><p>Nombre, cédula, teléfono y correo. Con eso ya puedes comprar de contado.</p></article>
       <article class="step reveal"><span class="n">02</span><h3>Elige tu equipo</h3><p>Cada equipo muestra su inicial y sus cuotas. Envías una foto tuya y de tu cédula, y pagas la inicial. Tus fotos y tu ubicación quedan privadas.</p></article>
       <article class="step reveal"><span class="n">03</span><h3>Recíbelo</h3><p>La tienda aprueba tu crédito y te lo envía. Pagas cada cuota desde tu cuenta.</p></article>
     </div>
@@ -590,7 +614,7 @@ function vCatalogo(){
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›${stT?`<button data-act="tienda" data-v="${stT.id}">${esc(stT.name)}</button>›`:''}<span>${esc(f.cat||'Catálogo')}</span>${qs?`›<span>“${esc(f.q)}”</span>`:''}</div>
   <div class="catalog">
     <aside class="filters">
-      <div><h4>Tienda</h4><label class="ck"><input type="radio" name="fs" data-on="fstore" value="" ${!f.store?'checked':''}>Las dos tiendas</label>${S.stores.map(t=>`<label class="ck"><input type="radio" name="fs" data-on="fstore" value="${t.id}" ${f.store===t.id?'checked':''}>${esc(t.name)}</label>`).join('')}</div>
+      <div><h4>Vendido por</h4><label class="ck"><input type="radio" name="fs" data-on="fstore" value="" ${!f.store?'checked':''}>Todas</label>${S.stores.map(t=>`<label class="ck"><input type="radio" name="fs" data-on="fstore" value="${t.id}" ${f.store===t.id?'checked':''}>${esc(t.name)}</label>`).join('')}</div>
       ${catsEnUso().length<2?'':`<div><h4>Categoría</h4>${['',...catsEnUso()].map(c=>`<label class="ck"><input type="radio" name="fc" data-on="fcat" value="${c}" ${(f.cat||'')===c?'checked':''}>${c||'Todas'}</label>`).join('')}</div>`}
       <div><h4>Marca</h4>${brands.map(b=>`<label class="ck"><input type="checkbox" data-on="fbrand" value="${esc(b)}" ${f.brands.includes(b)?'checked':''}>${esc(b)}</label>`).join('')}</div>
       <div><h4>Gama</h4><div class="field"><select data-on="fgama" aria-label="Gama"><option value="">General</option>${Object.entries(GAMAS).map(([k,v])=>`<option value="${k}" ${f.gama===k?'selected':''}>${v}</option>`).join('')}</select></div></div>
@@ -621,7 +645,7 @@ function vProducto(){
       <h1>${esc(p.name)}${p.storages?' '+esc(p.storages[pd.storage].n):''}</h1>
       <div class="condbox"><span class="tag ${p.cond==='nuevo'?'ok':'warn'}">${condN(p)}</span><span class="tag">${GAMAS[p.gama]||''}</span>${p.bat?`<span>Batería <b>${p.bat}%</b></span>`:''}</div>
       <div class="note small"><b>Garantía:</b> ${esc(ST(p.store).garCubre)} <span class="muted">No cubre: ${esc(ST(p.store).garExcluye.replace(/\.$/,'').toLowerCase())}.</span></div>
-      <div><span class="pr num">${usd(price)}</span><div class="muted small">En bolívares: <b class="num">${bs(bsPrice(price))}</b> · el monto en Bs es distinto al de dólares</div></div>
+      <div><span class="pr num">${usd(price)}</span><div class="muted small">${tasaOk(p.store)?`En bolívares: <b class="num">${bs(bsPrice(price, p.store))}</b> · el monto en Bs es distinto al de dólares`:'Precio en dólares · paga con USDT o efectivo'}</div></div>
       ${p.acc!=null?`<div><h4 style="margin-bottom:8px">Accesorios</h4><div class="opts"><button class="ob" data-act="pacc" data-v="0" aria-pressed="${!pd.acc}">Sin accesorios</button><button class="ob" data-act="pacc" data-v="1" aria-pressed="${!!pd.acc}">Con accesorios <span class="muted">+${usd(p.acc)}</span></button></div>${p.accDesc?`<div class="muted small" style="margin-top:6px">Incluye: ${esc(p.accDesc)}</div>`:''}</div>`:''}
       <div><h4 style="margin-bottom:8px">Color: <span class="muted" style="font-weight:500">${esc(p.colors[pd.color]?.n)}</span></h4>
         <div class="opts">${p.colors.map((c,i)=>`<button class="sw" style="background:${esc(c.hex)}" data-act="pcolor" data-i="${i}" aria-pressed="${pd.color===i}" aria-label="${esc(c.n)}"></button>`).join('')}</div></div>
@@ -630,16 +654,19 @@ function vProducto(){
         ${out?'<span class="tag">Agotado</span>':`<div class="qty"><button data-act="pqty" data-d="-1" aria-label="Menos">−</button><span class="num">${pd.qty}</span><button data-act="pqty" data-d="1" aria-label="Más">+</button></div>
         <span class="small ${p.stock<=5?'stk':'muted'}">${p.stock===1?'Última unidad':p.stock<=5?`Últimas ${p.stock} unidades`:`${p.stock} disponibles`}</span>`}
       </div>
-      <div class="row"><button class="btn buy" style="flex:1" ${out?'disabled':''} data-act="add" data-id="${p.id}">Agregar al carrito</button><button class="btn brand" style="flex:1" ${out?'disabled':''} data-act="buynow" data-id="${p.id}">Comprar ahora</button></div>
+      <div class="row"><button class="btn brand" style="flex:1" ${out?'disabled':''} data-act="buynow" data-id="${p.id}">Comprar ahora</button><button class="btn buy" style="flex:1" ${out?'disabled':''} data-act="add" data-id="${p.id}">Agregar al carrito</button></div>
+      <ul class="trust"><li>${ico('shield')} Garantía en cada equipo</li><li>${ico('check')} Se revisa contigo al entregar</li><li>${ico('truck')} Envíos a todo el país</li></ul>
       ${out?`<div class="note warn"><b>Está agotado.</b> Puedes encargarlo y ${esc(ST(p.store).name)} te avisa por WhatsApp cuando llegue. <div style="margin-top:8px"><button class="btn sm brand" data-act="encargar" data-id="${p.id}">Encargar este equipo</button></div></div>`:''}
       ${p.fin&&pOpts(p).length&&price>=S.cfg.minFin?(()=>{ const down = r2(price*pIni(p));
         return `<div class="finbox"><div class="h">Llévalo financiado</div>
         <table class="t"><tbody><tr><td>Inicial (${Math.round(pIni(p)*100)}%)</td><td class="r num"><b>${usd(down)}</b></td></tr>
         ${pOpts(p).map((o,i)=>{ const fin = r2(price*(1-pIni(p))*(1+S.cfg.plans[o.n])); return `<tr><td>${i?'o ':''}${o.n} cuotas ${FREQ[o.f]} de</td><td class="r num"><b>${usd(r2(fin/o.n))}</b></td></tr>`; }).join('')}
-        </tbody></table>${pOpts(p).length>1?'<div class="muted small" style="margin-top:6px">Eliges semanal o quincenal al pagar.</div>':''}</div>`; })():p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
-      ${wa?`<a class="link wa" href="${wa}" target="_blank" rel="noopener">${ico('chat')} Preguntar por WhatsApp</a>`:''}
+        </tbody></table>${pOpts(p).length>1?'<div class="muted small" style="margin-top:6px">Eliges semanal o quincenal al pagar.</div>':''}
+        ${out?'':`<button class="btn buy block" style="margin-top:12px" data-act="buyfin" data-id="${p.id}">Lo quiero en cuotas →</button>`}</div>`; })():p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
+      ${wa?`<div class="pdp-help">${ico('chat')}<div><b>¿Dudas sobre este equipo?</b><span>Te respondemos por WhatsApp${ST(p.store).horario?', '+esc(ST(p.store).horario.toLowerCase()):''}.</span></div><a class="btn sm" href="${wa}" target="_blank" rel="noopener">Escribir</a></div>`:''}
     </div>
   </section>
+  ${out?'':`<div class="buybar"><div><b class="num">${usd(price)}</b><span class="muted small">${p.fin&&pOpts(p).length&&price>=S.cfg.minFin?`o inicial de ${usd(r2(price*pIni(p)))}`:'Pago de contado'}</span></div><button class="btn brand" data-act="buynow" data-id="${p.id}">Comprar ahora</button></div>`}
   <div class="two" style="grid-template-columns:1fr 1fr">
     <section class="box"><h2>Especificaciones</h2><table class="spec">${Object.entries(p.specs).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></section>
     <section class="box"><h2>Descripción</h2><p>${esc(p.desc)}</p><div class="note">El equipo se revisa contigo al momento de la entrega.</div></section>
@@ -648,7 +675,7 @@ function vProducto(){
 }
 function vCarrito(){
   S.cart = S.cart.filter(i=>P(i.pid));
-  if(!S.cart.length) return `<div class="empty"><h2>Tu carrito está vacío</h2><p>Explora el catálogo y agrega lo que te guste.</p><button class="btn buy" data-act="cat" data-v="Teléfonos">Ver teléfonos</button></div>`;
+  if(!S.cart.length) return `<div class="empty"><h2>Tu carrito está vacío</h2><p>Encuentra tu próximo teléfono, en cuotas o de contado.</p><div class="row" style="justify-content:center">${S.stores.map((t,i)=>`<button class="btn ${i?'ghost':'buy'}" data-act="tienda" data-v="${t.id}">${t.cuotas?'Ver equipos en cuotas':'Ver equipos de contado'}</button>`).join('')}</div></div>`;
   const groups = cartStores();
   const item = i => { const ix = S.cart.indexOf(i), p = P(i.pid); return `
       <div class="citem"><div class="th">${img(p,i.ci)}</div>
@@ -664,15 +691,15 @@ function vCarrito(){
       : t.subtotal>=S.cfg.minFin ? `<div class="note ok small">Este pedido se puede pagar en cuotas: inicial desde ${usd(r2((t.subtotal-t.discount)*cartFin(items).ini))} y ${cartFin(items).opts.map(o=>`${o.n} cuotas ${FREQ[o.f]}`).join(' o ')}.</div>`
       : `<div class="note small">Agrega ${usd(S.cfg.minFin-t.subtotal)} más de esta tienda para poder pagar en cuotas.</div>`; };
   return `<h1 style="margin-bottom:6px">Carrito de compras</h1>
-  ${groups.length>1?`<p class="muted" style="margin-bottom:16px">Tienes productos de ${groups.length} tiendas. Cada tienda se paga y se despacha por separado, así que harás un pedido por tienda.</p>`:'<div style="height:12px"></div>'}
+  ${groups.length>1?`<p class="muted" style="margin-bottom:16px">Estos productos se despachan por separado, así que harás un pago por cada grupo.</p>`:'<div style="height:12px"></div>'}
   <div class="cgroups">${groups.map(g=>{ const t = cartTotals(g), items = t.items, bad = items.some(i=>i.qty>P(i.pid).stock);
     return `<section class="box cgroup"><div class="cg-h">${storeChip(g)}<span class="muted small">${t.units} artículo${t.units===1?'':'s'}</span></div>
       ${items.map(item).join('')}
       <div class="cg-f"><div><div class="sl tot"><span>Total ${esc(ST(g).name)}</span><span class="num">${usd(t.subtotal-t.discount)}</span></div>
         ${t.discount?`<div class="small" style="color:var(--ok)">Cupón ${esc(S.coupon)} aplicado (−${usd(t.discount)})</div>`:''}
-        <div class="muted small">En bolívares: ${bs(bsPrice(t.subtotal-t.discount))} · el envío se calcula al pagar</div>
+        <div class="muted small">${tasaOk(g)?`En bolívares: ${bs(bsPrice(t.subtotal-t.discount, g))} · `:''}el envío se calcula al pagar</div>
         ${finNote(items, t)}</div>
-        <button class="btn buy" data-act="tocheckout" data-s="${g}" ${bad?'disabled':''}>Pagar en ${esc(ST(g).name)}</button></div>
+        <button class="btn buy" data-act="tocheckout" data-s="${g}" ${bad?'disabled':''}>Continuar al pago →</button></div>
     </section>`; }).join('')}</div>
   <aside class="box sum" style="margin-top:16px;max-width:460px">
     ${S.cfg.cupon.code?`<form id="couponf" class="row" style="flex-wrap:nowrap"><div class="field" style="flex:1"><input id="cp" placeholder="Código de cupón" value="${esc(S.coupon)}" aria-label="Cupón"></div><button class="btn" type="submit">Aplicar</button></form>
@@ -691,7 +718,7 @@ function vCheckout(){
   if(!S.cart.length) return vCarrito();
   const gs = cartStores();
   if(!S.co || !gs.includes(S.co.store)){ const st = gs.includes(S.coStore) ? S.coStore : gs.length===1 ? gs[0] : null; if(!st) return vCarrito(); S.co = null; S.coStore = st; }
-  if(!S.co) S.co = {store:S.coStore, ship:'local', addr:u.addr||'', city:u.city||'', mode:'contado', n:midPlan(), ini:S.cfg.inicialMin, method:'pago_movil', later:false, when:'ahora', bank:BANKS[0], ref:'', amount:'', file:null, err:'', showPlan:false};
+  if(!S.co){ S.co = {store:S.coStore, ship:'local', addr:u.addr||'', city:u.city||'', mode:S.coMode||'contado', n:midPlan(), ini:S.cfg.inicialMin, method:'pago_movil', later:false, when:'ahora', bank:BANKS[0], ref:'', amount:'', file:null, err:'', showPlan:false}; S.coMode = null; }
   const co = S.co, k = coCalc();
   const items = cartOf(co.store), tS = ST(co.store);
   if(!(S.termsOk||{})[co.store] && M.type!=='terms') setTimeout(()=>{ if(location.hash.includes('checkout') && !(S.termsOk||{})[co.store] && M.type!=='terms') termsModal(co.store); }, 0);
@@ -709,8 +736,9 @@ function vCheckout(){
   const needV = fin && ['incompleto','rechazado'].includes(u.verif);
   const el = fin ? eligibility(k.financed, co.store) : null;
   if(el && needV){ el.ok = false; }
+  const mets = storeMethods(co.store); if(!mets.includes(co.method)) co.method = mets[0];
   const cur = METODOS[co.method].cur;
-  const hoyCur = cur==='Bs' ? bs(bsPrice(k.hoy)) : usd(k.hoy);
+  const hoyCur = cur==='Bs' ? bs(bsPrice(k.hoy, co.store)) : usd(k.hoy);
   const plans = cf.plans.length ? cf.plans : allPlans();
   const down = r2(k.base*co.ini);
   const cuotaDe = n => r2(r2((k.base-down)*(1+S.cfg.plans[n]))/n);
@@ -720,7 +748,7 @@ function vCheckout(){
   const payTxt = (tS.pay||{})[co.method] || '';
   return `<div class="crumbs"><button data-act="go" data-v="carrito">Carrito</button>›<span>Finalizar compra</span></div>
   <div class="row between" style="margin-bottom:18px"><h1>Finalizar compra</h1><span class="row small">Pedido para ${storeChip(co.store)}</span></div>
-  ${gs.length>1?`<div class="note info small" style="margin-bottom:14px">Este pedido incluye solo los productos de ${esc(tS.name)}. Los de la otra tienda siguen en tu carrito para pagarlos aparte.</div>`:''}
+  ${gs.length>1?`<div class="note info small" style="margin-bottom:14px">Este pedido lo despacha ${esc(tS.name)}. Los demás productos de tu carrito se pagan en un pedido aparte.</div>`:''}
   <div class="two">
   <div class="costeps">
     <section class="box"><h2><span class="stepn">1</span>Entrega</h2>
@@ -749,16 +777,16 @@ function vCheckout(){
     </section>
 
     <section class="box"><h2><span class="stepn">3</span>${fin?'Pago de la inicial':'Pago'}</h2>
-      <div class="seg seg4">${Object.keys(METODOS).map(key=>`<label class="so"><input type="radio" name="met" value="${key}" data-on="method" ${co.method===key?'checked':''}><span class="ot">${short[key]}</span><span class="os">${key==='usdt'?'Binance':METODOS[key].cur==='Bs'?'Bolívares':'Dólares'}</span></label>`).join('')}</div>
+      <div class="seg seg${Math.min(4,mets.length)}">${mets.map(key=>`<label class="so"><input type="radio" name="met" value="${key}" data-on="method" ${co.method===key?'checked':''}><span class="ot">${short[key]}</span><span class="os">${key==='usdt'?'Binance':METODOS[key].cur==='Bs'?'Bolívares':'Dólares'}</span></label>`).join('')}</div>
       <div class="bankdata"><span class="muted small">Datos para pagar a ${esc(tS.name)}</span><span>${esc(payTxt)}</span></div>
-      ${dualBox(k.hoy, co.method)}
+      ${dualBox(k.hoy, co.method, co.store)}
       <div class="small">Vas a pagar con <b>${short[co.method]}</b>: <b class="num">${hoyCur}</b></div>
       ${co.method==='efectivo'?`<div class="note info small">Al confirmar, ${esc(tS.name)} te escribe por WhatsApp para coordinar el pago en efectivo. Guardamos tus productos ${S.cfg.reservaHoras} horas.</div>`
         :`<label class="ck small"><input type="checkbox" data-on="later" ${co.later?'checked':''}>Pagaré después (guardamos tus productos ${S.cfg.reservaHoras} horas)</label>`}
       ${co.when==='ahora'?`<div class="fg">
         ${cur==='Bs'?`<div class="field"><label for="co-bank">Banco de origen</label><select id="co-bank" data-in="bank">${BANKS.map(b=>`<option ${co.bank===b?'selected':''}>${b}</option>`).join('')}</select></div>`:''}
         <div class="field"><label for="co-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="co-ref" data-in="ref" value="${esc(co.ref)}" placeholder="${cur==='Bs'?'Ej. 00418833':'ID de la orden en Binance'}"></div>
-        <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?bsPrice(k.hoy):k.hoy}"></div>
+        <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?bsPrice(k.hoy, co.store):k.hoy}"></div>
         <div class="field"><span class="lbl">Comprobante</span>${fileBtn('co-file', 'image/*,application/pdf', 'data-on="file"', 'Subir captura del pago', co.file)}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
       </div>`:''}
     </section>
@@ -810,7 +838,8 @@ function terminosHTML(t){
       <li><b>Condición del equipo.</b> En la ficha de cada teléfono se indica si es nuevo o usado (Clase A, B o C, según su estado) y el estado de la batería.</li>
       <li><b>Garantía.</b> ${esc(t.garCubre)} <b>No se aceptan como garantía:</b> ${esc(t.garExcluye.charAt(0).toLowerCase()+t.garExcluye.slice(1))}</li>
       <li><b>Revisión al entregar.</b> El equipo se revisa contigo al momento de la entrega (pantalla, cornetas, Face ID, pin de carga, botones y liberación).</li>
-      <li><b>Pagos.</b> Pago móvil, transferencia, USDT (Binance) o efectivo. Los pagos con comprobante se verifican antes de enviar el equipo. El efectivo lo registra la tienda cuando lo recibe.</li>
+      <li><b>Pagos.</b> ${storeMethods(t.id).map(k=>METODOS[k].n).join(', ')}. Los pagos con comprobante se verifican antes de enviar el equipo. El efectivo lo registra la tienda cuando lo recibe.</li>
+      <li><b>Precio en bolívares.</b> Los precios están en dólares. Si pagas en bolívares, el monto se calcula con la tasa de ${esc(t.name)} del día del pago${t.recargoBs?' e incluye un ajuste por pago en bolívares':''}; por eso es distinto al monto en dólares.</li>
       <li><b>Reserva.</b> Tus productos quedan reservados ${S.cfg.reservaHoras} horas mientras se confirma el pago; si no se paga, el pedido se cancela.</li>
     </ol>
     ${fin?`<h3>Si compras en cuotas</h3>
@@ -824,14 +853,85 @@ function terminosHTML(t){
     </ol>`:''}
   </div>`;
 }
+/* ===================== legal: términos de uso y política de privacidad ===================== */
+const LEGAL_FECHA = '10 de noviembre de 2026';
+function legalWho(){
+  return `<div class="tbl"><table class="t legal-who"><thead><tr><th>Comercio</th><th>RIF</th><th>Vende</th><th>Contacto</th></tr></thead><tbody>
+    ${S.stores.map(t=>`<tr><td><b>${esc(t.name)}</b>${t.rep?`<div class="muted small">Representante: ${esc(t.rep)}</div>`:''}</td><td class="nw">${esc(t.rif||'—')}</td><td>${t.cuotas?'De contado y en cuotas':'De contado'}</td>
+      <td>${t.whatsapp?`WhatsApp ${esc(fmtWa(t.whatsapp))}`:''}${t.correo?`<div>${esc(t.correo)}</div>`:''}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+const fmtWa = w => { const d = onlyDigits(w); return d.startsWith('58') && d.length===12 ? `+58 ${d.slice(2,5)}-${d.slice(5)}` : d; };
+function legalLayout(title, intro, secs){
+  return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>${title}</span></div>
+  <div class="legal">
+    <aside class="legal-toc box"><b>Contenido</b><ol>${secs.map(([id,h])=>`<li><button data-act="legal" data-v="${S.route.v}" data-s="${id}">${h}</button></li>`).join('')}</ol>
+      <div class="legal-alt">${S.route.v==='terminos'?'<button class="link small" data-act="go" data-v="privacidad">Ver la Política de privacidad →</button>':'<button class="link small" data-act="go" data-v="terminos">Ver los Términos de uso →</button>'}</div></aside>
+    <article class="legal-body">
+      <h1>${title}</h1><p class="muted small">Versión ${LEGAL_VERSION} · Vigente desde el ${LEGAL_FECHA}</p>
+      ${intro}
+      ${secs.map(([id,h,body],i)=>`<section id="lg-${id}"><h2><span class="num">${i+1}.</span> ${h}</h2>${body}</section>`).join('')}
+    </article>
+  </div>`;
+}
 function vTerminos(){
-  return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<span>Términos y condiciones</span></div>
-  <h1 style="margin-bottom:16px">Términos y condiciones</h1>
-  <div class="two">${S.stores.map(t=>`<section class="box">${storeChip(t.id)}${terminosHTML(t)}</section>`).join('')}</div>`;
+  const fin = finStores(), mora = usd(S.cfg.mora), g = S.stores[0] || {};
+  const secs = [
+    ['quienes','Quiénes somos', `<p>Este sitio lo operan los comercios que se indican abajo. Cada producto muestra quién lo vende (“Vendido por”). Ese comercio es el que recibe tu pago, despacha el equipo, responde por la garantía y, si aplica, te otorga el crédito.</p>${legalWho()}`],
+    ['aceptacion','Aceptación de estos términos', `<p>Al crear tu cuenta, marcar la casilla de aceptación o hacer un pedido, declaras que leíste y aceptas estos Términos de uso y la <button class="link" data-act="go" data-v="privacidad">Política de privacidad</button>. Esa aceptación electrónica tiene la misma validez que una firma escrita, conforme a la Ley sobre Mensajes de Datos y Firmas Electrónicas. Si no estás de acuerdo, no uses el sitio.</p>`],
+    ['cuenta','Tu cuenta', `<ul><li>Debes ser <b>mayor de 18 años</b> y tener cédula de identidad venezolana o de extranjero residente.</li><li>Los datos que registras deben ser verdaderos y tuyos. Se permite una cuenta por cédula.</li><li>Tu contraseña es personal. Eres responsable de lo que se haga con tu cuenta; si sospechas que alguien más la usa, cámbiala y avísanos.</li><li>Podemos suspender o cerrar cuentas con datos falsos, comprobantes alterados, suplantación de identidad o uso fraudulento, sin perjuicio de las acciones legales que correspondan.</li></ul>`],
+    ['productos','Productos y condición', `<p>Vendemos teléfonos y sus accesorios. Cada ficha indica la condición del equipo:</p><ul><li><b>Nuevo:</b> sin uso, en su empaque.</li><li><b>Clase A:</b> usado, en excelente estado, sin marcas visibles.</li><li><b>Clase B:</b> usado, con detalles estéticos leves que no afectan su funcionamiento.</li><li><b>Clase C:</b> usado, con marcas de uso visibles; funciona correctamente.</li></ul><p>En los equipos usados se indica, cuando se conoce, el estado de la batería. Las fotos pueden ser referenciales. La existencia es limitada y se confirma al verificar el pago.</p>`],
+    ['precios','Precios, moneda y tasa', `<ul><li>Los precios se publican en <b>dólares de los Estados Unidos (USD)</b> como moneda de referencia.</li><li>Si pagas en <b>bolívares</b> (pago móvil o transferencia), el monto se calcula con la tasa que publica el comercio vendedor el día del pago y puede incluir un <b>ajuste por pago en bolívares</b>. Por eso <b>el monto en bolívares y el monto en dólares son distintos</b>. Antes de pagar ves los dos montos.</li><li>El monto que se te muestra al momento de pagar es el que debes pagar. Si pagas otro día, el monto en bolívares puede cambiar porque la tasa cambia.</li><li>Si pagas en <b>USDT</b> o en <b>efectivo</b>, pagas el monto en dólares.</li><li>Cada pago queda registrado con la tasa que se usó.</li><li>Los precios y promociones pueden cambiar sin aviso, pero no afectan los pedidos ya pagados ni los créditos ya aprobados.</li></ul>`],
+    ['pedidos','Pedidos, reserva y pago', `<ul><li>Al confirmar un pedido, los productos quedan reservados por <b>${S.cfg.reservaHoras} horas</b>. Si en ese tiempo no se recibe el pago, el pedido se cancela solo.</li><li>Los pagos con comprobante (pago móvil, transferencia o USDT) los verifica el comercio antes de despachar. Si el comprobante no coincide con el dinero recibido, el pago se rechaza y te avisamos.</li><li>El pago en efectivo se coordina por WhatsApp y el comercio lo registra cuando lo recibe.</li><li>Enviar comprobantes falsos o alterados es motivo de cierre de la cuenta y puede ser denunciado ante las autoridades.</li><li>Puedes cancelar tu pedido mientras no se haya despachado. Si ya pagaste, te devolvemos el dinero por el mismo medio, en la moneda en que pagaste.</li></ul>`],
+    ['envios','Envíos y entrega', `<ul><li>Hacemos entregas por delivery en la ciudad y envíos nacionales por encomienda. El costo y el tiempo estimado se muestran antes de pagar.</li><li>Al recibir, <b>revisa el equipo con quien te lo entrega</b>: pantalla, cornetas, cámaras, Face ID o huella, pin de carga, botones y liberación. Cualquier falla visible debe reportarse en ese momento.</li><li>En envíos nacionales, el equipo viaja a nombre de la persona registrada en el pedido. Revisa el paquete al retirarlo de la empresa de encomiendas.</li></ul>`],
+    ['garantia','Garantía', `<p><b>Cubre:</b> ${esc(g.garCubre||'')}</p><p><b>No cubre:</b> ${esc(g.garExcluye||'')}</p><p>Para usarla, escríbele por WhatsApp al comercio que te vendió el equipo con el código de tu pedido y una descripción de la falla. El comercio revisa el equipo y, según el diagnóstico, lo repara o lo cambia por uno de igual condición. La garantía corre desde la fecha de entrega.</p>`],
+    ['devoluciones','Cambios y devoluciones', `<p>Si el equipo llega con una falla que se detecta en la revisión al entregar, o presenta una falla cubierta por la garantía, tienes derecho a la reparación o al cambio según lo indicado arriba. No se aceptan cambios por equipos dañados por el uso, golpes, humedad o manipulación de terceros. Esto no limita los derechos que te reconoce la legislación venezolana de protección a las personas en el acceso a bienes y servicios.</p>`],
+    ...(fin.length?[['cuotas','Compras en cuotas', `<p>Solo ${fin.map(t=>esc(t.name)).join(' y ')} vende en cuotas, y solo en los equipos marcados “Contado o cuotas”.</p><ul><li><b>Verificación:</b> para pedir un crédito verificamos tu identidad una sola vez (foto tuya, foto de tu cédula, dirección y ubicación). La aprobación la decide una persona del comercio y puede negarse.</li><li><b>Inicial y cuotas:</b> pagas una inicial y el resto en cuotas semanales o quincenales, según lo que permita cada equipo. Antes de confirmar ves el número de cuotas, el monto de cada una y sus fechas.</li><li><b>Mora:</b> si pagas una cuota después de su fecha, se suma un cargo fijo de <b>${mora}</b> a esa cuota.</li><li><b>Reserva de dominio:</b> el equipo sigue siendo propiedad del comercio hasta que pagues todas las cuotas.</li><li><b>Falta de pago:</b> si acumulas más de 3 cuotas vencidas sin pagar, el comercio puede dar por terminado el crédito y recuperar el equipo.</li><li><b>Contrato:</b> al recibir el equipo firmas un contrato de compraventa a crédito con el IMEI del equipo y el cronograma de pagos.</li><li><b>Pago adelantado:</b> puedes adelantar cuotas o liquidar el crédito cuando quieras.</li><li><b>Recordatorios:</b> te podemos escribir por WhatsApp antes y después de cada vencimiento.</li></ul>`]]:[]),
+    ['compras','Condiciones de compra por vendedor', `<p>Son las condiciones que aceptas antes de cada compra. Las de cada comercio:</p><div class="two">${S.stores.map(t=>`<section class="box">${storeChip(t.id)}${terminosHTML(t)}</section>`).join('')}</div>`],
+    ['uso','Uso permitido del sitio', `<p>No está permitido usar el sitio para fines ilícitos, intentar acceder a cuentas o datos de otras personas, interferir con su funcionamiento, copiar el catálogo de forma automatizada ni publicar información falsa. Estas conductas pueden constituir delitos según la Ley Especial contra los Delitos Informáticos.</p>`],
+    ['propiedad','Propiedad intelectual', `<p>Los nombres, logos, textos, fotos y diseño del sitio pertenecen a sus comercios o a sus respectivos titulares. Las marcas de los fabricantes de teléfonos pertenecen a ellos y se usan solo para identificar los productos.</p>`],
+    ['responsabilidad','Responsabilidad', `<p>Hacemos lo posible para que el sitio funcione sin interrupciones y la información sea correcta, pero puede haber fallas técnicas o errores de publicación. Si un precio publicado tiene un error evidente, te avisaremos antes de despachar y podrás cancelar con devolución total. No respondemos por fallas de los bancos, de Binance o de las empresas de encomiendas, ni por casos de fuerza mayor.</p>`],
+    ['cambios','Cambios a estos términos', `<p>Podemos actualizar estos términos. La versión y la fecha aparecen arriba. Si el cambio es importante, te lo mostraremos al entrar a tu cuenta y te pediremos aceptarlo. Los pedidos y créditos ya hechos se rigen por la versión que aceptaste en su momento.</p>`],
+    ['ley','Ley aplicable', `<p>Estos términos se rigen por las leyes de la República Bolivariana de Venezuela. Antes de cualquier reclamo formal, escríbenos: casi todo se resuelve por WhatsApp. Si no hay acuerdo, las partes se someten a los tribunales competentes de ${esc(BRAND.ciudad||'Caracas')}.</p>`],
+    ['contacto','Contacto', `<p>Para dudas sobre estos términos, escríbele por WhatsApp al comercio que corresponda:</p>${legalWho()}`]
+  ];
+  return legalLayout('Términos de uso', `<p class="lead-s">Estas son las reglas para usar este sitio y comprar en él. Están escritas en lenguaje sencillo; si algo no queda claro, pregúntanos por WhatsApp.</p>`, secs);
+}
+function vPrivacidad(){
+  const fin = finStores();
+  const secs = [
+    ['responsables','Quién es responsable de tus datos', `<p>Los comercios que operan este sitio son responsables de los datos que les das al registrarte y al comprarles. Cada comercio trata los datos de los pedidos, pagos y créditos que recibe.</p>${legalWho()}`],
+    ['datos','Qué datos recopilamos', `<ul>
+      <li><b>Al crear tu cuenta:</b> nombre y apellido, sexo, cédula, teléfono, correo y contraseña. La contraseña se guarda cifrada y nadie del comercio puede verla.</li>
+      <li><b>Al comprar:</b> productos, dirección y ciudad de entrega, forma de pago y método de envío.</li>
+      <li><b>Al pagar:</b> banco de origen, número de referencia o ID de la orden de Binance, monto pagado y la captura o PDF del comprobante.</li>
+      ${fin.length?`<li><b>Si pides un crédito:</b> fecha de nacimiento, estado, ciudad y dirección, tu ubicación en el momento de la solicitud (solo si la compartes), ocupación, lugar de trabajo, rango de ingreso, una referencia personal (nombre, teléfono y parentesco), una foto tuya y una foto de tu cédula.</li>`:''}
+      <li><b>Si haces un encargo o te postulas para vender con nosotros:</b> los datos que escribas en el formulario.</li>
+      <li><b>Al escribirnos por WhatsApp:</b> tu número y los mensajes que envíes.</li>
+      <li><b>Datos técnicos:</b> tu navegador guarda tu carrito y tu sesión para que no los pierdas. No usamos publicidad ni herramientas de rastreo de terceros.</li></ul>`],
+    ['uso','Para qué los usamos', `<ul><li>Crear y administrar tu cuenta.</li><li>Procesar tus pedidos, verificar tus pagos y enviarte los equipos.</li>${fin.length?'<li>Verificar tu identidad, evaluar y administrar tus créditos, preparar el contrato y recordarte tus cuotas por WhatsApp.</li>':''}<li>Atender la garantía, tus reclamos y tus consultas.</li><li>Prevenir fraudes, como comprobantes falsos o suplantación de identidad.</li><li>Cumplir obligaciones legales, fiscales y contables.</li></ul><p>No vendemos ni alquilamos tus datos. No los usamos para publicidad de terceros. Las decisiones sobre tu crédito las toma una persona, no un sistema automático.</p>`],
+    ['base','Tu consentimiento', `<p>Tratamos tus datos con tu consentimiento libre, previo, informado e inequívoco, que das al crear tu cuenta y, para los créditos, al enviar tu verificación; y porque son necesarios para cumplir la compra que nos pides. Seguimos los principios fijados por la Sala Constitucional del Tribunal Supremo de Justicia (sentencia N.° 1318 del 4 de agosto de 2011): consentimiento, legalidad, finalidad, calidad, temporalidad, exactitud, previsión, seguridad, tutela y responsabilidad. Puedes revocar tu consentimiento cuando quieras (ver “Tus derechos”).</p>`],
+    ['acceso','Quién puede ver tus datos', `<ul><li><b>El comercio al que le compras</b>, a través de su personal autorizado.</li>${fin.length?`<li><b>Los comercios de este sitio</b> pueden consultar el historial de tus compras en cuotas (créditos, cuotas y pagos) para administrar el riesgo de crédito. Las fotos de tu identidad solo las ve el comercio con el que compras.</li>`:''}<li><b>Proveedores que nos prestan servicios</b>: alojamiento del sitio y de la base de datos en la nube, y el proveedor de las fuentes tipográficas del sitio. Solo tratan los datos para prestar ese servicio.</li><li><b>Empresas de envío</b>: tu nombre, teléfono y dirección, solo para entregarte el paquete.</li><li><b>Autoridades</b>, cuando una ley o una orden judicial lo exija.</li></ul><p>Cada cliente solo puede ver sus propios datos. Los demás clientes nunca ven tu información.</p>`],
+    ['internacional','Servidores fuera de Venezuela', `<p>La base de datos y el sitio se alojan en servicios en la nube que pueden tener sus servidores fuera de Venezuela. Elegimos proveedores con medidas de seguridad reconocidas. Al aceptar esta política autorizas ese alojamiento.</p>`],
+    ['seguridad','Cómo protegemos tus datos', `<ul><li>Toda la comunicación con el sitio va cifrada (HTTPS).</li><li>Cada persona solo accede a lo que le corresponde: tú a tus datos, y el personal del comercio a los de sus clientes.</li><li>Las fotos de identidad y los comprobantes se guardan en un almacenamiento privado; solo se abren con enlaces temporales para el personal autorizado.</li><li>Los cambios que hace el personal quedan registrados en un historial.</li></ul><p>Ningún sistema es 100% invulnerable. Si ocurre un incidente que afecte tus datos, te avisaremos lo antes posible.</p>`],
+    ['conservacion','Cuánto tiempo los guardamos', `<p>Mientras tengas tu cuenta y, después, por el tiempo que exijan las obligaciones legales, fiscales y contables, o hasta que termines de pagar un crédito y se cierre cualquier reclamo pendiente. Luego los eliminamos o los anonimizamos. Las postulaciones que no avanzan se eliminan cuando lo pidas.</p>`],
+    ['derechos','Tus derechos', `<p>Según los artículos 28 y 60 de la Constitución, tienes derecho a:</p><ul><li><b>Saber</b> qué datos tenemos sobre ti y para qué los usamos.</li><li><b>Acceder</b> a ellos y recibir una copia.</li><li><b>Corregirlos o actualizarlos.</b> Tu teléfono y tu dirección los puedes cambiar tú en “Mi cuenta”.</li><li><b>Pedir que se eliminen</b> cuando ya no sean necesarios o cuando retires tu consentimiento, salvo los que debamos conservar por ley o por un crédito pendiente.</li><li><b>Revocar tu consentimiento</b> en cualquier momento, sin efecto sobre lo ya hecho.</li></ul><p>Para ejercerlos, escríbele por WhatsApp o por correo al comercio con el que compraste, desde el número o el correo de tu cuenta. Te respondemos en un máximo de 15 días hábiles.</p>`],
+    ['terceros','Datos de otras personas', `<p>Si nos das los datos de una referencia personal o de otra persona que recibe tu pedido, confirmas que esa persona sabe que nos los das y está de acuerdo.</p>`],
+    ['menores','Menores de edad', `<p>El sitio es solo para mayores de 18 años. No creamos cuentas a menores. Si detectamos una, la cerramos y eliminamos sus datos.</p>`],
+    ['navegador','Datos guardados en tu navegador', `<p>Usamos el almacenamiento de tu navegador solo para tu carrito y para mantener tu sesión iniciada. No usamos cookies de publicidad. Si borras los datos del navegador, se vacía el carrito y tendrás que volver a ingresar.</p>`],
+    ['cambios','Cambios a esta política', `<p>Si cambiamos esta política, actualizaremos la versión y la fecha de arriba. Si el cambio es importante, te lo mostraremos al entrar a tu cuenta y te pediremos aceptarlo.</p>`],
+    ['contacto','Contacto', `${legalWho()}`]
+  ];
+  return legalLayout('Política de privacidad', `<p class="lead-s">Aquí te explicamos qué datos tuyos guardamos, para qué, quién los ve y cómo puedes controlarlos. Tus datos son tuyos.</p>`, secs);
+}
+function legalModal(){
+  M = {type:'legal'};
+  modal('Actualizamos nuestros términos', `<p>Publicamos una nueva versión de los <button class="link" data-act="legalgo" data-v="terminos">Términos de uso</button> y de la <button class="link" data-act="legalgo" data-v="privacidad">Política de privacidad</button> (versión ${LEGAL_VERSION}).</p><p class="muted small">Explican con más detalle cómo se calculan los montos en bolívares, la garantía, las compras en cuotas y cómo cuidamos tus datos.</p>`,
+    `<button class="btn" data-act="logout">Salir</button><button class="btn buy" data-act="legalok">Leí y acepto</button>`);
 }
 function termsModal(store){
   const t = ST(store); M = {type:'terms', store};
-  modal(`Antes de comprar en ${esc(t.name)}`, `<p class="muted small" style="margin:0">Lee las condiciones. Al continuar, aceptas que las conoces.</p>${terminosHTML(t)}`,
+  modal(`Antes de comprar en ${esc(t.name)}`, `<p class="muted small" style="margin:0">Lee las condiciones. Al continuar, aceptas que las conoces junto con los <button class="link small" data-act="legalgo" data-v="terminos">Términos de uso</button> y la <button class="link small" data-act="legalgo" data-v="privacidad">Política de privacidad</button>.</p>${terminosHTML(t)}`,
     `<button class="btn" data-act="termsno">Volver al carrito</button><button class="btn buy" data-act="termsok">Acepto y continuar</button>`, true);
 }
 function vFinanciamiento(){
@@ -986,11 +1086,26 @@ function aResumen(){
   const toShip = S.orders.filter(inAdm).filter(o=>['preparando','listo_retiro'].includes(o.st)), unpaid = S.orders.filter(inAdm).filter(o=>['pendiente_pago','pago_rechazado'].includes(o.st));
   // según el contrato: más de 3 cuotas sin pagar = se puede recuperar el equipo
   const recup = S.credits.filter(inAdm).filter(c=>['activo','en_mora'].includes(c.st)).map(c=>({c, v:c.cuotas.filter(q=>q.status==='pendiente' && q.due<dayStart(S.today)).length})).filter(x=>x.v>3);
+  const tsts = admStoreId()!=null ? [ST(admStoreId())] : S.stores;
+  const tasaAl = tsts.map(t=>!t.tasa ? `<div class="note bad small"><b>${esc(t.name)} no ha publicado su tasa.</b> Sus clientes solo pueden pagar en dólares. <button class="link small" data-act="adm" data-v="config">Publicar tasa</button></div>`
+    : (!t.tasaAt || dayStart(t.tasaAt).getTime()!==dayStart(new Date()).getTime()) ? `<div class="note warn small">La tasa de ${esc(t.name)} no se ha actualizado hoy (última: ${t.tasaAt?fd(t.tasaAt):'—'}). <button class="link small" data-act="adm" data-v="config">Actualizar</button></div>` : '').join('');
+  // caja del mes por moneda: lo que realmente entró, separado de lo que se aplicó a las deudas
+  const mes = ok.filter(p=>p.reviewedAt.getFullYear()===S.today.getFullYear() && p.reviewedAt.getMonth()===S.today.getMonth());
+  const vesP = mes.filter(p=>p.currency==='Bs'), usdtP = mes.filter(p=>p.method==='usdt'), efP = mes.filter(p=>p.method==='efectivo');
+  const vesBs = r2(sum(vesP,p=>p.reported)), vesUsd = r2(sum(vesP,p=>p.reported/p.tasa)), vesApl = r2(sum(vesP,reportedUSD));
+  const caja = `<section class="box"><h3>Caja de este mes por moneda</h3>
+    <div class="tbl"><table class="t"><thead><tr><th>Moneda</th><th class="r">Pagos</th><th class="r">Recibido</th><th class="r">Equivale a</th><th class="r">Aplicado a deudas</th></tr></thead><tbody>
+      <tr><td>Bolívares (pago móvil y transferencia)</td><td class="r num">${vesP.length}</td><td class="r num">${bs(vesBs)}</td><td class="r num">${usd(vesUsd)}</td><td class="r num">${usd(vesApl)}</td></tr>
+      <tr><td>USDT</td><td class="r num">${usdtP.length}</td><td class="r num">${usd(r2(sum(usdtP,p=>p.reported)))}</td><td class="r num">—</td><td class="r num">${usd(r2(sum(usdtP,reportedUSD)))}</td></tr>
+      <tr><td>Efectivo (dólares)</td><td class="r num">${efP.length}</td><td class="r num">${usd(r2(sum(efP,p=>p.reported)))}</td><td class="r num">—</td><td class="r num">${usd(r2(sum(efP,reportedUSD)))}</td></tr>
+    </tbody></table></div>
+    <p class="muted small">"Equivale a" convierte los bolívares con la tasa guardada en cada pago. La diferencia con "Aplicado a deudas" es el ajuste por pagar en bolívares.</p></section>`;
   const alertas = `<section class="box"><h3>Alertas</h3>
+        ${tasaAl}
         ${recup.map(({c,v})=>`<div class="note bad small"><b>${c.code} de ${esc(U(c.userId)?.name||'')}</b>: ${v} cuotas vencidas sin pagar. Según el contrato, la tienda puede recuperar el equipo.</div>`).join('')}
         ${short.map(p=>`<div class="note warn small">${p.code} de ${esc(U(p.userId)?.name||'')}: el monto reportado es menor al esperado por ${usd(r2(p.expected-reportedUSD(p)))}.</div>`).join('')}
         ${low.map(p=>`<div class="note ${p.stock<=0?'bad':'warn'} small">${esc(p.name)}: ${p.stock<=0?'sin existencia':`quedan ${p.stock} unidades`}.</div>`).join('')}
-        ${!recup.length&&!short.length&&!low.length?'<p class="muted">Sin alertas.</p>':''}</section>`;
+        ${!tasaAl&&!recup.length&&!short.length&&!low.length?'<p class="muted">Sin alertas.</p>':''}</section>`;
   return `<div class="row between"><h1>Resumen</h1><button class="btn sm" data-act="cierre">Ejecutar cierre diario ahora</button></div>
     <div class="kpis">
       <div class="kpi ${pend.length?'alert':''}"><div class="l">Comprobantes por verificar</div><div class="v num">${pend.length}</div></div>
@@ -1000,7 +1115,8 @@ function aResumen(){
       <div class="kpi"><div class="l">Pedidos sin pagar</div><div class="v num">${unpaid.length}</div><div class="muted small">se cancelan solos al vencer la reserva</div></div>`}
       <div class="kpi"><div class="l">Cobrado este mes</div><div class="v num">${usd(vals[5])}</div></div>
     </div>
-    <div class="chart"><h3 style="margin-bottom:8px">Pagos verificados por mes (USD)</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pagos verificados por mes">${grid}${bars}</svg></div>
+    <div class="chart"><h3 style="margin-bottom:8px">Pagos verificados por mes (USD aplicados a deudas)</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pagos verificados por mes">${grid}${bars}</svg></div>
+    ${caja}
     ${!cuo?alertas:`<div class="two" style="grid-template-columns:1fr 1fr">
       <section class="box"><h3>Cuotas vencidas y por vencer (7 días)</h3>
         ${soon.length?`<div class="tbl"><table class="t"><tbody>${soon.map(({c,q})=>`<tr><td>${esc(U(c.userId)?.name||'')}<div class="muted small">${c.code} · cuota ${q.n}</div></td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(cuotaDue(q))}</td><td>${q.status==='en_revision'?'<span class="tag warn">En revisión</span>':q.due<today?'<span class="tag bad">Vencida</span>':'<span class="tag">Por vencer</span>'}</td><td class="nw">${q.status==='pendiente'?cuotaWa(c,q)+` <button class="btn sm" data-act="cajacuota" data-q="${q.id}">Registrar efectivo</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Nada pendiente en los próximos 7 días.</p>'}</section>
@@ -1096,6 +1212,7 @@ function cuotaWa(c, q){
   const msg = `Hola ${u.name.split(' ')[0]}, te escribimos de ${t.name}. `
     + (late ? `Tu cuota ${q.n} de ${c.n} (crédito ${c.code}) venció el ${fd(q.due)}${q.mora?` y ya tiene ${usd(q.mora)} de mora`:''}. El monto a pagar es ${usd(cuotaDue(q))}.`
             : `Te recordamos que tu cuota ${q.n} de ${c.n} (crédito ${c.code}) por ${usd(cuotaDue(q))} vence el ${fd(q.due)}. Págala antes de esa fecha para evitar el cargo de ${usd(S.cfg.mora)} por mora.`)
+    + (t.tasa ? ` En bolívares (pago móvil o transferencia) son ${bs(bsPrice(cuotaDue(q), c.store))} a la tasa de hoy.` : '')
     + ` Puedes pagarla y subir el comprobante desde tu cuenta en ${location.host || 'la página'}. ¡Gracias!`;
   return `<a class="btn sm" href="https://wa.me/${waNum(u.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${ico('chat')} Recordar</a>`;
 }
@@ -1296,22 +1413,41 @@ function aConfig(){
     <div class="fg">${Object.entries(METODOS).map(([k,m])=>`<div class="field"><label for="c-d-${k}">${m.n}</label><input id="c-d-${k}" data-dp="${k}" value="${esc(d[k]||'')}" placeholder="${({pago_movil:'Banco · teléfono · cédula', transferencia:'Banco · cuenta · titular · cédula', usdt:'Binance ID o correo de Binance Pay', efectivo:'Ej. al recibir el equipo'})[k]||''}"></div>`).join('')}</div>
     <div class="err" id="tf-err"></div>
     <div><button class="btn brand" type="submit">Guardar datos de la tienda</button></div></form></section>
-  <section class="box"><h2>${admCuo()?'Configuración común':'Tasa del día'}</h2><p class="muted small">${admCuo()?'Aplica a las dos tiendas: la tasa del día, la mora y los planes de cuotas. Cualquier administrador puede cambiarla y queda registrado en el historial de cambios.':'Es la misma para las dos tiendas. El cambio queda registrado en el historial de cambios.'}</p>
+  ${tasaSection(sid)}
+  ${admCuo()||isGenAdmin()?`<section class="box"><h2>Reglas de financiamiento</h2><p class="muted small">Mora, inicial mínima y opciones de cuotas de las compras en cuotas. Cada cambio queda en el historial.</p>
     <form id="cfgf" class="field" style="gap:16px">
     <div class="fg">
-      <div class="field"><label for="c-tasa">Tasa para pagos en bolívares (Bs por USD)</label><input id="c-tasa" inputmode="decimal" value="${c.tasa}"><span class="hint">No se muestra en la página; se usa para calcular el monto en Bs. Actualízala a diario.</span></div>
-      <div class="field"><label for="c-rbs">Ajuste para pagos en bolívares (%)</label><input id="c-rbs" inputmode="decimal" value="${r2((c.recargoBs||0)*100)}"><span class="hint">Monto en Bs = precio en dólares + este % × tasa. Pon 0 si es el mismo precio.</span></div>
-      <div class="field" ${admCuo()?'':'hidden'}><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
-      <div class="field" ${admCuo()?'':'hidden'}><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
-      <div class="field" ${admCuo()?'':'hidden'}><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
+            <div class="field"><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
+      <div class="field"><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
+      <div class="field"><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
       <input id="c-cupo" type="hidden" value="${c.cupoBase}">
     </div>
-    ${admCuo()?`<h3>Opciones de cuotas</h3>
+    <h3>Opciones de cuotas</h3>
     <p class="muted small" style="margin-top:-8px">Son las opciones que puedes asignar a cada equipo, con su recargo. En Inventario, al editar un equipo, eliges en cuántas cuotas se paga; el cliente no lo elige.</p>
     <div id="planes" class="planes">${allPlans().map(n=>planRow(n, r2(c.plans[n]*100))).join('')}</div>
-    <div><button class="btn sm" data-act="planadd">+ Agregar plan</button></div>`:''}
+    <div><button class="btn sm" data-act="planadd">+ Agregar plan</button></div>
     <div class="err" id="c-err"></div>
-    <div><button class="btn brand" type="submit">${admCuo()?'Guardar configuración común':'Guardar tasa'}</button></div></form></section>`;
+    <div><button class="btn brand" type="submit">Guardar reglas de financiamiento</button></div></form></section>`:''}`;
+}
+// tasa de la tienda: cada administrador publica la suya; queda en el historial para la contabilidad
+function tasaSection(sid){
+  const t = ST(sid), hist = (S.tasas||[]).filter(h=>h.store===sid).slice(0,8);
+  const today = t.tasaAt && dayStart(t.tasaAt).getTime()===dayStart(new Date()).getTime();
+  const ej = t.tasa ? bs(r2(100*(1+t.recargoBs)*t.tasa)) : null;
+  return `<section class="box" id="tasa-box"><h2>Tasa para pagos en bolívares · ${esc(t.name)}</h2>
+    <p class="muted small">Es la tasa de esta tienda. No se publica como tal: se usa para calcular el monto en bolívares que ve el cliente al pagar. Cada pago guarda la tasa del momento.</p>
+    ${!t.tasa?`<div class="note bad small"><b>Aún no has publicado tu tasa.</b> Mientras tanto tus clientes solo pueden pagar en dólares (USDT o efectivo).</div>`
+      :!today?`<div class="note warn small">La última actualización fue el ${fd(t.tasaAt)}. Actualízala hoy para cobrar el monto correcto en bolívares.</div>`
+      :`<div class="note ok small">Actualizada hoy a las ${t.tasaAt.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'})}.</div>`}
+    <form id="tasaf" class="field" style="gap:14px" data-id="${sid}"><div class="fg">
+      <div class="field"><label for="t-tasa">Tasa (Bs por cada dólar)</label><input id="t-tasa" inputmode="decimal" value="${t.tasa??''}" placeholder="Ej. 236,50"><span class="hint">Cuántos bolívares vale un dólar hoy para esta tienda.</span></div>
+      <div class="field"><label for="t-rbs">Ajuste para pagos en bolívares (%)</label><input id="t-rbs" inputmode="decimal" value="${r2((t.recargoBs||0)*100)}"><span class="hint">Monto en Bs = precio en dólares + este % × tasa. Pon 0 si cobras lo mismo.</span></div>
+    </div>
+    ${ej?`<p class="small">Ejemplo con los valores guardados: un equipo de <b>$100</b> se paga <b class="num">${ej}</b> en bolívares.</p>`:''}
+    <div class="err" id="t-err"></div>
+    <div><button class="btn brand" type="submit">Publicar tasa</button></div></form>
+    ${hist.length?`<h3>Últimos cambios</h3><div class="tbl"><table class="t"><thead><tr><th>Fecha</th><th class="r">Tasa</th><th class="r">Ajuste Bs</th><th>Quién</th></tr></thead><tbody>${hist.map(h=>`<tr><td class="nw">${fd(h.at)} ${h.at.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'})}</td><td class="r num">${bs(h.tasa)}</td><td class="r num">${r2(h.rec*100)}%</td><td>${esc(h.by)}</td></tr>`).join('')}</tbody></table></div>`:''}
+  </section>`;
 }
 function planRow(n, pct){ return `<div class="planrow"><div class="field"><label>Cuotas</label><input data-pn inputmode="numeric" data-digits="2" value="${n??''}" placeholder="Ej. 12"></div>
   <div class="field"><label>Recargo (%)</label><input data-pr inputmode="decimal" value="${pct??''}" placeholder="Ej. 20"></div>
@@ -1392,6 +1528,7 @@ function kycErrors(){
   if(!k.ocup || !k.ingreso) return 'Indica tu ocupación e ingreso aproximado.';
   if(!k.selfie) return 'Agrega una foto tuya.';
   if(!k.cedula) return 'Agrega la foto de tu cédula.';
+  if(!k.consent) return 'Marca la autorización para verificar tu identidad.';
   return '';
 }
 async function compressImg(file, max=1600){
@@ -1439,7 +1576,7 @@ function vRegistro(){
         <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
       </div>
       <div class="priv">${ico('shield')}<p><b>Tus datos quedan privados.</b> Tu cédula y tu teléfono, y si compras en cuotas la foto de tu cédula, tu foto y tu ubicación, se guardan de forma privada y no se divulgan. Solo se usan para verificar tu identidad.</p></div>
-      <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}>Acepto los <button type="button" class="link" data-act="go" data-v="terminos">términos y condiciones</button> y la política de privacidad.</label>
+      <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}><span>Soy mayor de 18 años y acepto los <button type="button" class="link" data-act="go" data-v="terminos">Términos de uso</button> y la <button type="button" class="link" data-act="go" data-v="privacidad">Política de privacidad</button>, incluido el tratamiento de mis datos como allí se explica.</span></label>
       ${k.err?`<div class="note bad small">${esc(k.err)}</div>`:''}
       <button class="btn buy block" data-act="doregister">${S.busy?'Creando cuenta…':'Crear cuenta'}</button>
       <span class="muted small">¿Ya tienes cuenta? <button class="link small" data-act="go" data-v="login">Ingresa aquí</button></span>
@@ -1456,8 +1593,8 @@ async function doRegister(){
   if(!/^0\d{10}$/.test(tel)) return fail('Escribe tu teléfono de 11 números, por ejemplo 04141234567.');
   if(!/^\S+@\S+\.\S+$/.test(em)) return fail('Escribe un correo válido.');
   if(k.pass.length<8 || !/\d/.test(k.pass)) return fail('La contraseña debe tener al menos 8 caracteres y un número.');
-  if(!k.terms) return fail('Acepta los términos para continuar.');
-  const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, sexo:k.sexo, cedula:`${k.tipo}-${ced}`, telefono:tel}, emailRedirectTo: location.origin + location.pathname}});
+  if(!k.terms) return fail('Para crear tu cuenta debes ser mayor de edad y aceptar los Términos de uso y la Política de privacidad.');
+  const {data, error} = await sb.auth.signUp({email:em, password:k.pass, options:{data:{nombre:name, sexo:k.sexo, cedula:`${k.tipo}-${ced}`, telefono:tel, acepta_legal:'true', legal_version:LEGAL_VERSION}, emailRedirectTo: location.origin + location.pathname}});
   if(error) return fail(/already registered|already been registered/i.test(error.message) ? 'Ya existe una cuenta con ese correo. Ingresa con tu contraseña.'
     : /Database error/i.test(error.message) ? 'Esa cédula ya está registrada en otra cuenta.' : /Password/i.test(error.message) ? 'La contraseña es muy débil. Usa al menos 8 caracteres con letras y números.' : friendly(error));
   S.kyc = null;
@@ -1477,6 +1614,7 @@ function verifPanel(){
       <div class="field"><label for="k-nacm">Mes</label><select id="k-nacm" data-k="nacM"><option value="">Mes</option>${MESES.map((m,i)=>opt(i+1,m,k.nacM)).join('')}</select></div>
       <div class="field"><label for="k-nacy">Año</label><select id="k-nacy" data-k="nacY"><option value="">Año</option>${Array.from({length:73},(_,i)=>y0-18-i).map(y=>opt(y,y,k.nacY)).join('')}</select></div>`; })()}</div></section>
     ${kycSections(2)}
+    <label class="ck small"><input type="checkbox" data-k="consent" ${S.kyc.consent?'checked':''}><span>Autorizo que se usen mi foto, la foto de mi cédula, mi ubicación y los datos de este formulario solo para verificar mi identidad y evaluar mi crédito, como explica la <button type="button" class="link" data-act="go" data-v="privacidad">Política de privacidad</button>.</span></label>
     ${S.kyc.err?`<div class="note bad small">${esc(S.kyc.err)}</div>`:''}
     <div><button class="btn buy" data-act="dokyc">${S.busy?'Enviando…':S.after==='checkout'?'Enviar y volver a mi compra':'Enviar verificación'}</button></div>`;
 }
@@ -1704,19 +1842,20 @@ function modal(head, body, foot='', wide=false){
 function closeModal(){ $('#ov').hidden = true; M = {}; }
 
 function payModal(ctx){
-  M = Object.assign({}, ctx, {method: METODOS_COMP.includes(ctx.method) ? ctx.method : 'pago_movil'});
+  const okM = METODOS_COMP.filter(k=>storeMethods(ctx.store).includes(k)); const lm = okM.length ? okM : ['usdt'];
+  M = Object.assign({}, ctx, {method: lm.includes(ctx.method) ? ctx.method : lm[0]});
   const cur = METODOS[M.method].cur;
   modal(esc(M.title), `
     <div class="note info small">${M.desc}</div>
     ${M.store?`<p class="muted small" style="margin:-4px 0 0">¿Vas a pagar en efectivo? Escríbele a ${esc(ST(M.store).name)} por WhatsApp: la tienda lo registra cuando lo recibe.</p>`:''}
-    <div class="field"><label for="pm-met">Método</label><select id="pm-met" data-on="pmmet">${Object.entries(METODOS).filter(([k])=>METODOS_COMP.includes(k)).map(([k,m])=>`<option value="${k}" ${M.method===k?'selected':''}>${m.n}</option>`).join('')}</select></div>
+    <div class="field"><label for="pm-met">Método</label><select id="pm-met" data-on="pmmet">${Object.entries(METODOS).filter(([k])=>lm.includes(k)).map(([k,m])=>`<option value="${k}" ${M.method===k?'selected':''}>${m.n}</option>`).join('')}</select></div>
     <div class="bankdata">${M.store?`<span class="muted small">Datos para pagar a ${esc(ST(M.store).name)}</span>`:''}${payInfo(M.method, M.store)}
 </div>
-    ${dualBox(M.amount, M.method)}
+    ${dualBox(M.amount, M.method, M.store)}
     <form id="payf" class="fg" novalidate>
       ${cur==='Bs'?`<div class="field"><label for="pm-bank">Banco de origen</label><select id="pm-bank">${BANKS.map(b=>`<option>${b}</option>`).join('')}</select></div>`:''}
       <div class="field"><label for="pm-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="pm-ref"></div>
-      <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?bsPrice(M.amount):M.amount}"></div>
+      <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?bsPrice(M.amount, M.store):M.amount}"></div>
       <div class="field"><span class="lbl">Comprobante</span>${fileBtn('pm-file', 'image/*,application/pdf', '', 'Subir captura del pago')}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
       <div class="err" id="pm-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="submitpay">Enviar comprobante</button>`);
@@ -1800,14 +1939,16 @@ function render(){
   const v = S.route.v;
   if(v==='login' && me()){ location.hash = isAdmin() ? 'admin' : 'cuenta'; return; }
   const view = {inicio:vInicio, catalogo:vCatalogo, producto:vProducto, carrito:vCarrito, checkout:vCheckout, login:()=>vLogin(S.after?'Inicia sesión para continuar.':''),
-    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, terminos:vTerminos, 'nueva-clave':vNuevaClave, registro:vRegistro, trabaja:vTrabaja, encargo:vEncargo}[v];
+    cuenta:vCuenta, admin:vAdmin, financiamiento:vFinanciamiento, terminos:vTerminos, privacidad:vPrivacidad, 'nueva-clave':vNuevaClave, registro:vRegistro, trabaja:vTrabaja, encargo:vEncargo}[v];
   if(!view){ $('#app').className = ''; $('#app').innerHTML = vInicio(); renderChrome(); setHH(); storyStart(); homeFx(); return; }
   $('#app').className = v==='inicio' || !view ? '' : 'wrap';
   $('#app').innerHTML = view();
-  renderChrome();
+  renderChrome(); S.fab = false; renderFab();
   setHH();
   if($('#story')){ storyStart(); homeFx(); } else storyStop();
   document.querySelectorAll('label.so, label.ch').forEach(l=>l.classList.toggle('on', !!l.querySelector('input:checked')));
+  // clientes con una versión anterior de los términos: se les pide aceptar la nueva (una vez por sesión)
+  const u0 = me(); if(u0 && !isAdmin() && u0.legalV!==LEGAL_VERSION && !S.legalAsked && !['terminos','privacidad'].includes(v) && !$('#ov:not([hidden]) .modal')){ S.legalAsked = true; setTimeout(legalModal, 400); }
 }
 async function afterLogin(){
   const a = S.after; S.after = null; S.co = null; S.acct = 'resumen'; S.adm = 'resumen';
@@ -1870,7 +2011,7 @@ async function placeOrder(){
     const cur = METODOS[co.method].cur;
     const ref = co.ref.trim();
     if(cur==='Bs' ? !/^\d{6,}$/.test(ref) : !/^[A-Za-z0-9]{6,}$/.test(ref)) return fail(cur==='Bs' ? 'La referencia debe tener al menos 6 dígitos.' : 'El ID de la orden de Binance debe tener al menos 6 caracteres.');
-    const amt = parseAmt(co.amount || (cur==='Bs' ? bsPrice(k.hoy) : k.hoy));
+    const amt = parseAmt(co.amount || (cur==='Bs' ? bsPrice(k.hoy, co.store) : k.hoy));
     if(!(amt>0)) return fail('Escribe el monto que pagaste.');
     if(!co.file) return fail('Adjunta la imagen o PDF del comprobante.');
     pago = {banco: cur==='Bs' ? co.bank : '', referencia: ref, monto_reportado: amt, comprobante_path: await uploadProof(co.file)};
@@ -1947,6 +2088,8 @@ const ACT = {
     if(addToCart(pid, onPd?S.pd.color:0, onPd?S.pd.storage:0, onPd?S.pd.qty:1, onPd&&S.pd.acc)){ renderChrome(); toast(`${P(pid).name} agregado al carrito.`); } },
   buynow: d => { if(addToCart(+d.id, S.pd.color, S.pd.storage, S.pd.qty, S.pd.acc)) go('carrito'); },
   pacc: d => { S.pd.acc = d.v==='1'; render(); },
+  buyfin: d => { const p = P(+d.id); if(addToCart(+d.id, S.pd.color, S.pd.storage, S.pd.qty, S.pd.acc)){ S.co = null; S.coStore = p.store; S.coMode = 'financiado'; go('checkout'); } },
+  fabwa: () => { S.fab = !S.fab; renderFab(); },
   cqty: d => { const it = S.cart[+d.i]; const p = P(it.pid); const n = it.qty + +d.d;
     if(n > it.qty && sum(S.cart.filter(i=>i.pid===it.pid),i=>i.qty) >= p.stock){ toast(`Solo hay ${p.stock} unidades disponibles.`); return; }
     it.qty = n; if(it.qty<=0) S.cart.splice(+d.i,1); S.co=null; saveCart(); render(); },
@@ -2003,6 +2146,10 @@ const ACT = {
   }),
   termsok: () => { S.termsOk = Object.assign(S.termsOk||{}, {[M.store]:true}); closeModal(); render(); },
   termsno: () => { closeModal(); go('carrito'); },
+  legal: d => { const go2 = () => { const el = document.getElementById('lg-'+d.s); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); };
+    if(S.route.v!==d.v){ go(d.v); setTimeout(go2, 120); } else go2(); },
+  legalgo: d => { closeModal(); S.legalAsked = true; go(d.v); },
+  legalok: () => run(async()=>{ await rpc('aceptar_legal', {p_version:LEGAL_VERSION}); closeModal(); await refresh(); toast('Gracias. Términos aceptados.'); }),
   termsver: () => termsModal(S.co.store),
   planadd: () => { $('#planes').insertAdjacentHTML('beforeend', planRow(null, null)); $('#planes .planrow:last-child [data-pn]').focus(); },
   plandel: (d, b) => b.closest('.planrow').remove(),
@@ -2092,10 +2239,16 @@ document.addEventListener('submit', e=>{
       else if(planes[nn]!==undefined) bad = `El plan de ${nn} cuotas está repetido.`; planes[nn] = r2(parseAmt(pv||'0')/100); });
     if($('#planes') && !bad && !Object.keys(planes).length) bad = 'Deja al menos un plan de cuotas.';
     if(bad){ $('#c-err').textContent = bad; return; }
-    const v = {tasa:n('c-tasa'), recargo_bs:r2(n('c-rbs')/100), mora:n('c-mora'), inicial_min:r2(n('c-ini')/100), min_financiable:n('c-min'), cupo_base:n('c-cupo')}; if($('#planes')) v.planes = planes;
-    if(!(v.tasa>0) || !(v.recargo_bs>=0 && v.recargo_bs<=1) || !(v.mora>=0) || !(v.inicial_min>=0 && v.inicial_min<=0.9) || !(v.min_financiable>=0) || !(v.cupo_base>=0) || Object.values(planes).some(x=>!(x>=0&&x<=1))){
+    const v = {mora:n('c-mora'), inicial_min:r2(n('c-ini')/100), min_financiable:n('c-min'), cupo_base:n('c-cupo')}; if($('#planes')) v.planes = planes;
+    if(!(v.mora>=0) || !(v.inicial_min>=0 && v.inicial_min<=0.9) || !(v.min_financiable>=0) || !(v.cupo_base>=0) || Object.values(planes).some(x=>!(x>=0&&x<=1))){
       $('#c-err').textContent='Revisa los valores: deben ser números válidos y los porcentajes entre 0 y 100.'; return; }
-    await rpc('actualizar_config', {p:v}); await refresh(); toast('Configuración guardada.');
+    await rpc('actualizar_config', {p:v}); await refresh(); toast('Reglas de financiamiento guardadas.');
+  });
+  if(id==='tasaf') run(async()=>{
+    const sid = +e.target.dataset.id, tasa = parseAmt($('#t-tasa').value), rec = parseAmt($('#t-rbs').value||'0');
+    if(!(tasa>0)){ $('#t-err').textContent = 'Escribe la tasa: cuántos bolívares vale un dólar.'; return; }
+    if(!(rec>=0 && rec<=100)){ $('#t-err').textContent = 'El ajuste debe estar entre 0 y 100%.'; return; }
+    await rpc('actualizar_tasa', {p_tasa:tasa, p_recargo:r2(rec/100), p_tienda:sid}); await refresh(); toast('Tasa publicada.');
   });
   if(id==='tiendaf') run(async()=>{
     const f = e.target, sid = +f.dataset.id, t = ST(sid), err = $('#tf-err'); err.textContent = '';
