@@ -22,6 +22,7 @@ const dateOnly = s => s ? new Date(String(s).slice(0,10) + 'T12:00:00') : null;
 const sum = (a,f) => a.reduce((s,x)=>s+(+f(x)||0),0);
 const parseAmt = s => { s = String(s ?? '').trim().replace(/\s/g,''); if(/,\d{1,2}$/.test(s)) s = s.replace(/\./g,'').replace(',','.'); else s = s.replace(/,/g,''); return +s; };
 const ICO = {
+  upload:'<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
   cart:'<path d="M3 4h2l2.4 11h11l2-8H6.2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/>',
@@ -329,6 +330,8 @@ function historial(uid){
 }
 const concept = p => { const o=O(p.orderId), c=C(p.creditId);
   return p.kind==='contado' ? `Pago de contado · ${o?.code||''}` : p.kind==='inicial' ? `Inicial + envío · ${c?.code||''}` : `Cuota${p.cuotas.length>1?'s':''} ${p.cuotas.join(', ')} · ${c?.code||''}`; };
+// botón para subir archivos, siempre en español (el del navegador cambia según su idioma)
+const fileBtn = (id, accept, attrs, txt, file) => `<label class="filebtn" for="${id}"><input id="${id}" type="file" accept="${accept}" ${attrs}><span class="fb">${ico('upload')} ${txt}</span><span class="fn ${file?'ok':''}">${file?'✓ '+esc(file.name):'Ningún archivo elegido'}</span></label>`;
 const amtTxt = p => p.currency==='Bs' ? `${bs(p.reported)} <span class="muted small">(${usd(reportedUSD(p))})</span>` : usd(p.reported);
 const waLink = (txt, store) => { const n = store ? ST(store).whatsapp : (S.stores.find(t=>t.whatsapp)||{}).whatsapp; return n ? `https://wa.me/${encodeURIComponent(n)}?text=${encodeURIComponent(txt)}` : ''; };
 // logo de una tienda: la imagen subida o un monograma con sus iniciales
@@ -756,7 +759,7 @@ function vCheckout(){
         ${cur==='Bs'?`<div class="field"><label for="co-bank">Banco de origen</label><select id="co-bank" data-in="bank">${BANKS.map(b=>`<option ${co.bank===b?'selected':''}>${b}</option>`).join('')}</select></div>`:''}
         <div class="field"><label for="co-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="co-ref" data-in="ref" value="${esc(co.ref)}" placeholder="${cur==='Bs'?'Ej. 00418833':'ID de la orden en Binance'}"></div>
         <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?bsPrice(k.hoy):k.hoy}"></div>
-        <div class="field"><label for="co-file">Comprobante</label><input id="co-file" type="file" accept="image/*,application/pdf" data-on="file"><span class="hint">${co.file?'Archivo listo: '+esc(co.file.name):'Captura o PDF del pago. Máximo 5 MB.'}</span></div>
+        <div class="field"><span class="lbl">Comprobante</span>${fileBtn('co-file', 'image/*,application/pdf', 'data-on="file"', 'Subir captura del pago', co.file)}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
       </div>`:''}
     </section>
   </div>
@@ -1209,7 +1212,7 @@ function productModal(id){
       <div class="field" style="grid-column:1/-1"><label for="pf-spe">Especificaciones <span class="muted">(una por línea: nombre: valor)</span></label><textarea id="pf-spe" rows="4">${esc(specTxt)}</textarea></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-des">Descripción</label><textarea id="pf-des" rows="2">${esc(p?.desc||'')}</textarea></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-img">Foto del producto <span class="muted">(fondo blanco o liso)</span></label>
-        <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div><input id="pf-img" type="file" accept="image/*" data-on="prodimg"></div></div>
+        <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div>${fileBtn('pf-img', 'image/*', 'data-on="prodimg"', p&&p.img?'Cambiar foto':'Elegir foto')}</div></div>
       ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
       <div class="field"><label for="pf-ini">Inicial mínima de este equipo (%)</label><input id="pf-ini" inputmode="numeric" data-digits="2" value="${p&&p.ini!=null?Math.round(p.ini*100):''}" placeholder="${Math.round(S.cfg.inicialMin*100)} (general)"><span class="hint">Déjalo vacío para usar la inicial general (${Math.round(S.cfg.inicialMin*100)}%).</span></div>
       ${[['semanal','pf-cs','Cuotas semanales', p?p.cs:(allPlans().includes(8)?8:null)],['quincenal','pf-cq','Cuotas quincenales', p?p.cq:(allPlans().includes(4)?4:midPlan())]].map(([f,id,l,cur])=>`<div class="field"><label for="${id}">${l}</label><select id="${id}"><option value="">No permitir</option>${allPlans().map(n=>`<option value="${n}" ${+cur===n?'selected':''}>${n} cuotas${S.cfg.plans[n]?` (recargo ${r2(S.cfg.plans[n]*100)}%)`:''}</option>`).join('')}</select></div>`).join('')}
@@ -1714,7 +1717,7 @@ function payModal(ctx){
       ${cur==='Bs'?`<div class="field"><label for="pm-bank">Banco de origen</label><select id="pm-bank">${BANKS.map(b=>`<option>${b}</option>`).join('')}</select></div>`:''}
       <div class="field"><label for="pm-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="pm-ref"></div>
       <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?bsPrice(M.amount):M.amount}"></div>
-      <div class="field"><label for="pm-file">Comprobante (imagen o PDF)</label><input id="pm-file" type="file" accept="image/*,application/pdf"></div>
+      <div class="field"><span class="lbl">Comprobante</span>${fileBtn('pm-file', 'image/*,application/pdf', '', 'Subir captura del pago')}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
       <div class="err" id="pm-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="submitpay">Enviar comprobante</button>`);
 }
@@ -2025,6 +2028,7 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('change', async e=>{
   const t = e.target;
+  if(t.type==='file' && t.closest && t.closest('.filebtn')){ const f = t.files[0]; const fn = t.closest('.filebtn').querySelector('.fn'); fn.textContent = f ? '✓ ' + f.name : 'Ningún archivo elegido'; fn.classList.toggle('ok', !!f); }
   if(t.closest && t.closest('#prodf') && (t.type==='checkbox' || t.tagName==='SELECT')) prodSim();
   if(t.dataset.e && S.enc){ S.enc[t.dataset.e] = t.value; if(t.type==='radio') render(); return; }
   if(t.dataset.k){ const o = S.route.v==='trabaja' ? S.post : kycInit(me()); if(o){ o[t.dataset.k] = t.type==='checkbox' ? t.checked : t.value; if(t.tagName==='SELECT' || t.type==='checkbox' || t.type==='date' || t.type==='radio') render(); } return; }
