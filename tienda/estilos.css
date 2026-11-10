@@ -686,3 +686,13 @@ nav.cats .tasa b{color:var(--gold-l);font-weight:700}
 }
 .story .hero-copy .hero-st .sh{display:none}
 @media (max-width:760px){.story .hero-copy .hero-st .lg{display:none}.story .hero-copy .hero-st .sh{display:inline}}
+
+/* monto en bolívares y en dólares */
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.dual>div{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--white)}
+.dual>div span{font-size:13px;font-weight:600}
+.dual>div small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.dual>div b{font-size:18px}
+.dual>div.on{border:2px solid var(--brand-2);background:var(--brand-soft)}
+.dual p{grid-column:1/-1;margin:0;font-size:13px;padding:8px 10px;border-radius:8px;background:var(--warn-bg);color:#6b3e05}
+@media (max-width:420px){.dual>div b{font-size:16px}}

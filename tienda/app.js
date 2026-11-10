@@ -145,14 +145,16 @@ const inAdm = x => { const t = myStore() ?? (S.admStore || null); return t==null
 const admStoreId = () => myStore() ?? (S.admStore || null);
 // ¿la tienda del panel vende en cuotas? (Papa's Store no: se ocultan créditos, cuotas y mora)
 const admCuo = () => { const t = admStoreId(); return t==null || ST(t).cuotas; };
-const unitPrice = (p, si=0) => p.price + (p.storages && p.storages[si] ? +p.storages[si].d || 0 : 0);
+const unitPrice = (p, si=0, acc=false) => p.price + (p.storages && p.storages[si] ? +p.storages[si].d || 0 : 0) + (acc && p.acc!=null ? p.acc : 0);
+// precio en bolívares: el precio en dólares, más el ajuste para pagos en Bs, a la tasa
+const bsPrice = u => r2(u*(1+(S.cfg.recargoBs||0))*S.cfg.tasa);
 
 function loadCart(){ try{ const c = JSON.parse(localStorage.getItem('carrito') || '[]'); return Array.isArray(c) ? c : []; }catch(e){ return []; } }
 function saveCart(){ try{ localStorage.setItem('carrito', JSON.stringify(S.cart)); }catch(e){} }
 
 /* ===================== conversión de datos ===================== */
 function mapCfg(c){
-  return { tasa:+c.tasa, mora:+c.mora, inicialMin:+c.inicial_min, inicialMax:+c.inicial_max, minFin:+c.min_financiable,
+  return { tasa:+c.tasa, recargoBs:+(c.recargo_bs||0), mora:+c.mora, inicialMin:+c.inicial_min, inicialMax:+c.inicial_max, minFin:+c.min_financiable,
     plans:Object.fromEntries(Object.entries(c.planes).map(([k,v])=>[k,+v])), reservaHoras:c.reserva_horas,
     cupoBase:+c.cupo_base, cupoPorLiq:+c.cupo_por_liquidado, cupoMax:+c.cupo_max, maxCreditos:c.max_creditos,
     envio:Object.fromEntries(Object.entries(c.envio).map(([k,v])=>[k,{n:v.nombre, c:+v.costo, d:v.detalle}])),
@@ -170,7 +172,8 @@ function mapProduct(p){
     colors:(p.colores && p.colores.length ? p.colores : [{n:'Único', hex:'#777'}]), storages:(p.capacidades && p.capacidades.length ? p.capacidades : null),
     specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo, fin:p.financiable!==false,
     ini:p.inicial_min!=null?+p.inicial_min:null, plans:Array.isArray(p.planes)&&p.planes.length?p.planes.map(Number):null,
-    cond:p.condicion||'nuevo', bat:p.bateria??null, gar:p.garantia_meses??null, cs:p.cuotas_semanal??null, cq:p.cuotas_quincenal??null };
+    cond:p.condicion||'nuevo', bat:p.bateria??null, gar:p.garantia_meses??null, cs:p.cuotas_semanal??null, cq:p.cuotas_quincenal??null,
+    gama:p.gama||(+p.precio<200?'baja':+p.precio<500?'media':'alta'), acc:p.accesorios_extra!=null?+p.accesorios_extra:null, accDesc:p.accesorios_desc||'' };
 }
 function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, sexo:u.sexo||'', cedula:u.cedula, phone:u.telefono||'', email:u.email||'', addr:u.direccion||'', city:u.ciudad||'', role:u.rol, created:new Date(u.creado_en),
   verif:u.verificacion || (u.rol==='admin'?'verificado':'incompleto'), verifNota:u.verificacion_nota||'', nac:u.fecha_nacimiento||'', estadoVzla:u.estado_vzla||'', ocup:u.ocupacion||'', trabajo:u.lugar_trabajo||'',
@@ -206,7 +209,7 @@ async function loadPrivate(){
     ship:{method:o.envio_metodo, addr:o.direccion, city:o.ciudad}, subtotal:+o.subtotal, discount:+o.descuento, shipCost:+o.envio_costo, total:+o.total,
     st:o.estado, status:PED[o.estado]||o.estado, created:new Date(o.creado_en), deadline:o.reservado_hasta?new Date(o.reservado_hasta):null,
     tracking:o.guia, courier:o.transporte, cancelReason:o.motivo_cancelacion, creditId:null,
-    items: it.filter(i=>i.pedido_id===o.id).map(i=>({pid:i.producto_id, name:i.nombre, color:i.color, ci:i.color_idx, storage:i.capacidad, si:i.cap_idx, qty:i.cantidad, unit:+i.precio_unitario})) }));
+    items: it.filter(i=>i.pedido_id===o.id).map(i=>({pid:i.producto_id, name:i.nombre, color:i.color, ci:i.color_idx, storage:i.capacidad, si:i.cap_idx, qty:i.cantidad, unit:+i.precio_unitario, acc:!!i.accesorios})) }));
   const cuotaById = {};
   S.credits = cr.map(c=>{
     const cuotas = cu.filter(x=>x.credito_id===c.id).map(x=>{ const q={id:x.id, n:x.numero, due:dateOnly(x.vence), amount:+x.monto, mora:+x.mora, moraAt:dateOnly(x.mora_aplicada_en), status:x.estado, paidAt:dateOnly(x.pagada_en)}; cuotaById[x.id]=q; return q; });
@@ -215,7 +218,7 @@ async function loadPrivate(){
   });
   S.credits.forEach(c=>{ const o=O(c.orderId); if(o) o.creditId=c.id; });
   S.payments = pa.map(g=>({ id:g.id, store:g.tienda_id||1, code:g.codigo, userId:g.usuario_id, orderId:g.pedido_id, creditId:g.credito_id, kind:g.tipo, method:g.metodo,
-    currency:g.moneda==='VES'?'Bs':'USD', bank:g.banco, ref:g.referencia, expected:+g.monto_esperado_usd, reported:+g.monto_reportado, tasa:+g.tasa,
+    currency:g.moneda==='VES'?'Bs':'USD', bank:g.banco, ref:g.referencia, expected:+g.monto_esperado_usd, reported:+g.monto_reportado, tasa:+g.tasa, recargo:+(g.recargo_bs||0),
     path:g.comprobante_path, status:g.estado, note:g.nota, reviewedAt:g.revisado_en?new Date(g.revisado_en):null, created:new Date(g.creado_en),
     cuotas: pc.filter(x=>x.pago_id===g.id).map(x=>cuotaById[x.cuota_id]?.n).filter(Boolean).sort((a,b)=>a-b) }));
   S.notifs = no.map(n=>({id:n.id, at:new Date(n.creado_en), text:n.texto, read:n.leida}));
@@ -245,7 +248,7 @@ function shipPrice(m, base){ if(m==='nacional' && base>=S.cfg.envioGratis) retur
 const cuotaDue = q => r2(q.amount + q.mora);
 const saldo = c => ['activo','en_mora'].includes(c.st) ? r2(sum(c.cuotas.filter(q=>q.status!=='pagada'), cuotaDue)) : 0;
 const pendingCuotas = c => c.cuotas.filter(q=>q.status==='pendiente');
-const reportedUSD = p => p.currency==='Bs' ? r2(p.reported / p.tasa) : r2(p.reported);
+const reportedUSD = p => p.currency==='Bs' ? r2(p.reported / (p.tasa*(1+(p.recargo||0)))) : r2(p.reported);
 function eligibility(financed, store){
   const k = (store && S.cupos[store]) || S.cupo || {limite:0, usado:0, disponible:0, activos:0, en_mora:false};
   const why = [];
@@ -301,7 +304,15 @@ const FREQ = {semanal:'semanales', quincenal:'quincenales', mensual:'mensuales'}
 const venceCuota = (freq, k, base=S.today) => freq==='semanales'||freq==='semanal' ? addDays(base, 7*k) : freq==='quincenales'||freq==='quincenal' ? addDays(base, 15*k) : addMonths(base, k);
 const pFreq = p => FREQ[pOpts(p)[0]?.f] || 'quincenales';
 // etiqueta de estado del equipo: "Usado · batería 90% · garantía 2 meses"
-const condTxt = p => [p.cond==='usado'?'Usado':'Nuevo', p.bat?`batería ${p.bat}%`:''].filter(Boolean).join(' · ');
+const CONDS = {nuevo:'Nuevo', clase_a:'Clase A', clase_b:'Clase B', clase_c:'Clase C', usado:'Usado'};
+const GAMAS = {baja:'Gama baja', media:'Gama media', alta:'Gama alta'};
+const condN = p => CONDS[p.cond] || 'Nuevo';
+const condTxt = p => [condN(p), p.bat?`batería ${p.bat}%`:''].filter(Boolean).join(' · ');
+// el mismo monto en bolívares y en dólares; el método elegido queda resaltado
+const dualBox = (amt, method) => { const isBs = METODOS[method]?.cur==='Bs'; return `<div class="dual">
+  <div class="${isBs?'on':''}"><span>En bolívares<small>Pago móvil o transferencia</small></span><b class="num">${bs(bsPrice(amt))}</b></div>
+  <div class="${isBs?'':'on'}"><span>En dólares<small>USDT o efectivo</small></span><b class="num">${usd(amt)}</b></div>
+  <p><b>Importante:</b> el monto en bolívares y el monto en dólares son distintos. Paga el que corresponde al método que elegiste.</p></div>`; };
 // para un pedido con varios equipos: la inicial más alta y las cuotas que todos permiten
 const cartFin = items => { const ps = items.map(i=>P(i.pid)).filter(Boolean);
   // frecuencias que todos los equipos del carrito permiten, con el mismo número de cuotas
@@ -334,7 +345,7 @@ function pcard(p){
     <div class="bd">
       <span class="brandname">${esc(p.brand)} · <span class="by">${esc(ST(p.store).name)}</span></span>
       <button class="nm" data-act="pd" data-id="${p.id}">${esc(p.name)}${p.storages?` ${esc(p.storages[0].n)}`:''}</button>
-      <span class="cond ${p.cond==='usado'?'us':''}">${esc(condTxt(p))}</span>
+      <span class="cond ${p.cond!=='nuevo'?'us':''}">${esc(condTxt(p))}</span>
       <span class="pr num">${usd(p.price)}</span>
       ${!ST(p.store).cuotas?'<span class="sp">Pago de contado</span>':p.fin&&p.price>=S.cfg.minFin?(pOpts(p).length?`<span class="cuo">o ${pOpts(p).map(o=>`${o.n} cuotas ${FREQ[o.f]} de ${usd(finCuota(p.price, o.n, pIni(p)))}`).join(' · ')}</span>`:'<span class="sp">Solo pago de contado</span>'):p.fin?`<span class="sp">En cuotas si tu compra suma ${usd(S.cfg.minFin)}</span>`:'<span class="sp">Solo pago de contado</span>'}
       ${!out && p.stock<=5?`<span class="stk">${p.stock===1?'Última unidad':`Últimas ${p.stock} unidades`}</span>`:''}
@@ -374,7 +385,7 @@ function renderChrome(){
   const v = S.route.v;
   const cu = catsEnUso();
   $('#cats').innerHTML = (cu.length>1 ? cu.map(c=>`<button data-act="cat" data-v="${c}" aria-current="${v==='catalogo' && S.f.cat===c}">${c}</button>`).join('') : '')
-    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">${cu.length>1?'Todo el catálogo':'Catálogo'}</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>${S.cfg?`<span class="tasa" title="Tasa del día para pagos en bolívares">Tasa <b class="num">${bs(S.cfg.tasa)}</b></span>`:''}`;
+    + `<button data-act="cat" data-v="" aria-current="${v==='catalogo' && !S.f.cat && !S.f.store}">${cu.length>1?'Todo el catálogo':'Catálogo'}</button>${S.stores.map(t=>`<button class="stb" data-act="tienda" data-v="${t.id}" aria-current="${v==='catalogo' && S.f.store===t.id}">${esc(t.name)}</button>`).join('')}<button class="sp" data-act="go" data-v="financiamiento" aria-current="${v==='financiamiento'}">Financiamiento</button><button data-act="go" data-v="encargo" aria-current="${v==='encargo'}">Encargos</button><button data-act="go" data-v="trabaja" aria-current="${v==='trabaja'}">Empleos</button>`;
   $('#foot').innerHTML = `<div class="wrap cols">
       <div><div class="logo">${logoHTML()}</div>
         <p style="margin-top:10px;max-width:34ch">Dos tiendas, una sola cuenta. ${finStores().map(t=>esc(t.name)).join(' y ')} vende en cuotas; ${cashStores().map(t=>esc(t.name)).join(' y ')}, de contado.</p></div>
@@ -413,7 +424,7 @@ function storyHTML(){
           <div class="f side r"></div><div class="f side l"></div>
           <div class="f back"><div class="cam"><div class="lens a"></div><div class="lens b"></div><div class="lens c"></div><div class="flash"></div></div></div>
           <div class="f front"><div class="screen" id="screen"><div class="isl"></div><div class="time">10:30</div><div class="date">${new Date().toLocaleDateString('es-VE',{weekday:'long',day:'numeric',month:'long'})}</div>
-            <div class="offer"><small>${esc(finStores()[0]?.name||'Llévalo hoy')}</small><b class="num">${iniPct}% de inicial</b><span>y el resto en cuotas</span></div><div class="glare"></div></div></div>
+            <div class="offer"><small>${esc(finStores()[0]?.name||'Llévalo hoy')}</small><b class="num">Inicial desde ${iniPct}%</b><span>en equipos seleccionados</span></div><div class="glare"></div></div></div>
         </div>
         <div class="layers" id="layers">
           <div class="lay l-back"><span class="lbl">Equipos originales</span></div>
@@ -465,7 +476,7 @@ function vInicio(){
       <article class="step reveal"><span class="n">03</span><h3>Recíbelo</h3><p>La tienda aprueba tu crédito y te lo envía. Pagas cada cuota desde tu cuenta.</p></article>
     </div>
     <div class="stats reveal">
-      <div><b class="num" data-count="${iniPct}" data-suf="%">${iniPct}%</b><span>de inicial mínima</span></div>
+      <div><b class="num" data-count="${iniPct}" data-suf="%">${iniPct}%</b><span>de inicial, en equipos seleccionados</span></div>
       <div><b class="num" data-count="${plans[plans.length-1]||9}">${plans[plans.length-1]||9}</b><span>cuotas como máximo</span></div>
       <div><b class="num" data-count="${S.cfg.reservaHoras}" data-suf=" h">${S.cfg.reservaHoras} h</b><span>de reserva sin pagar</span></div>
       <div><b class="num" data-count="${Math.round(S.cfg.mora)}" data-pre="$">${usd(S.cfg.mora).replace('.00','')}</b><span>de mora fija por cuota atrasada</span></div>
@@ -565,7 +576,7 @@ function homeFx(){
 
 function vCatalogo(){
   const f = S.f; const qs = f.q.trim().toLowerCase();
-  let list = S.products.filter(p=>(!f.store||p.store===f.store) && (!f.cat||p.cat===f.cat) && (!f.brands.length||f.brands.includes(p.brand)) && (!f.max||p.price<=+f.max) && (!f.fin||(f.fin==='si'?p.fin:!p.fin)) && (!f.stock||p.stock>0)
+  let list = S.products.filter(p=>(!f.store||p.store===f.store) && (!f.cat||p.cat===f.cat) && (!f.brands.length||f.brands.includes(p.brand)) && (!f.gama||p.gama===f.gama) && (!f.fin||(f.fin==='si'?p.fin:!p.fin)) && (!f.stock||p.stock>0)
     && (!qs || (p.name+' '+p.brand+' '+p.cat+' '+Object.values(p.specs).join(' ')).toLowerCase().includes(qs)));
   if(f.sort==='asc') list.sort((a,b)=>a.price-b.price);
   if(f.sort==='desc') list.sort((a,b)=>b.price-a.price);
@@ -579,10 +590,10 @@ function vCatalogo(){
       <div><h4>Tienda</h4><label class="ck"><input type="radio" name="fs" data-on="fstore" value="" ${!f.store?'checked':''}>Las dos tiendas</label>${S.stores.map(t=>`<label class="ck"><input type="radio" name="fs" data-on="fstore" value="${t.id}" ${f.store===t.id?'checked':''}>${esc(t.name)}</label>`).join('')}</div>
       ${catsEnUso().length<2?'':`<div><h4>Categoría</h4>${['',...catsEnUso()].map(c=>`<label class="ck"><input type="radio" name="fc" data-on="fcat" value="${c}" ${(f.cat||'')===c?'checked':''}>${c||'Todas'}</label>`).join('')}</div>`}
       <div><h4>Marca</h4>${brands.map(b=>`<label class="ck"><input type="checkbox" data-on="fbrand" value="${esc(b)}" ${f.brands.includes(b)?'checked':''}>${esc(b)}</label>`).join('')}</div>
-      <div><h4>Precio máximo</h4><div class="field"><select data-on="fmax" aria-label="Precio máximo"><option value="">Sin límite</option>${[100,200,300,500,800].map(v=>`<option value="${v}" ${+f.max===v?'selected':''}>Hasta ${usd(v)}</option>`).join('')}</select></div></div>
+      <div><h4>Gama</h4><div class="field"><select data-on="fgama" aria-label="Gama"><option value="">General</option>${Object.entries(GAMAS).map(([k,v])=>`<option value="${k}" ${f.gama===k?'selected':''}>${v}</option>`).join('')}</select></div></div>
       <div><h4>Disponibilidad</h4>
-        <label class="ck"><input type="checkbox" data-on="fstock" ${f.stock?'checked':''}>Solo con existencia</label></div>
-      ${(f.brands.length||f.max||f.fin||f.stock||f.q)?`<button class="link" data-act="clearf">Limpiar filtros</button>`:''}
+        <label class="ck"><input type="checkbox" data-on="fstock" ${f.stock?'checked':''}>Disponible</label></div>
+      ${(f.brands.length||f.gama||f.fin||f.stock||f.q)?`<button class="link" data-act="clearf">Limpiar filtros</button>`:''}
     </aside>
     <div>
       ${stT?`<div class="storehead">${storeMark(stT,44)}<div><b>${esc(stT.name)}</b><span class="muted small">${esc(stT.slogan)}</span></div></div>`:''}
@@ -595,7 +606,7 @@ function vCatalogo(){
 }
 function vProducto(){
   const p = P(S.route.id); if(!p) return `<div class="empty"><h2>Producto no encontrado</h2><button class="btn" data-act="cat" data-v="">Ver catálogo</button></div>`;
-  const pd = S.pd; const price = unitPrice(p, pd.storage); const out = p.stock<=0;
+  const pd = S.pd; const price = unitPrice(p, pd.storage, pd.acc); const out = p.stock<=0;
   const rel = S.products.filter(x=>x.id!==p.id && x.store===p.store && (x.cat===p.cat || x.cat==='Accesorios')).slice(0,4);
   const wa = waLink(`Hola, quiero información sobre el ${p.name}.`, p.store);
   return `<div class="crumbs"><button data-act="go" data-v="inicio">Inicio</button>›<button data-act="cat" data-v="${esc(p.cat)}">${esc(p.cat)}</button>›<span>${esc(p.name)}</span></div>
@@ -605,9 +616,10 @@ function vProducto(){
       <button class="soldby" data-act="tienda" data-v="${p.store}">Vendido por ${storeChip(p.store)}</button>
       <span class="brandname">${esc(p.brand)} · Código ${String(p.id).padStart(4,'0')}</span>${p.fin?'<span class="tag ok" style="justify-self:start">Contado o cuotas</span>':'<span class="tag dark" style="justify-self:start">Solo contado</span>'}
       <h1>${esc(p.name)}${p.storages?' '+esc(p.storages[pd.storage].n):''}</h1>
-      <div class="condbox"><span class="tag ${p.cond==='usado'?'warn':'ok'}">${p.cond==='usado'?'Usado':'Nuevo'}</span>${p.bat?`<span>Batería <b>${p.bat}%</b></span>`:''}</div>
+      <div class="condbox"><span class="tag ${p.cond==='nuevo'?'ok':'warn'}">${condN(p)}</span><span class="tag">${GAMAS[p.gama]||''}</span>${p.bat?`<span>Batería <b>${p.bat}%</b></span>`:''}</div>
       <div class="note small"><b>Garantía:</b> ${esc(ST(p.store).garCubre)} <span class="muted">No cubre: ${esc(ST(p.store).garExcluye.replace(/\.$/,'').toLowerCase())}.</span></div>
-      <div><span class="pr num">${usd(price)}</span><div class="muted small">${bs(price*S.cfg.tasa)} a la tasa del día</div></div>
+      <div><span class="pr num">${usd(price)}</span><div class="muted small">En bolívares: <b class="num">${bs(bsPrice(price))}</b> · el monto en Bs es distinto al de dólares</div></div>
+      ${p.acc!=null?`<div><h4 style="margin-bottom:8px">Accesorios</h4><div class="opts"><button class="ob" data-act="pacc" data-v="0" aria-pressed="${!pd.acc}">Sin accesorios</button><button class="ob" data-act="pacc" data-v="1" aria-pressed="${!!pd.acc}">Con accesorios <span class="muted">+${usd(p.acc)}</span></button></div>${p.accDesc?`<div class="muted small" style="margin-top:6px">Incluye: ${esc(p.accDesc)}</div>`:''}</div>`:''}
       <div><h4 style="margin-bottom:8px">Color: <span class="muted" style="font-weight:500">${esc(p.colors[pd.color]?.n)}</span></h4>
         <div class="opts">${p.colors.map((c,i)=>`<button class="sw" style="background:${esc(c.hex)}" data-act="pcolor" data-i="${i}" aria-pressed="${pd.color===i}" aria-label="${esc(c.n)}"></button>`).join('')}</div></div>
       ${p.storages?`<div><h4 style="margin-bottom:8px">Almacenamiento</h4><div class="opts">${p.storages.map((s,i)=>`<button class="ob" data-act="pstor" data-i="${i}" aria-pressed="${pd.storage===i}">${esc(s.n)}${+s.d?` <span class="muted">+${usd(s.d)}</span>`:''}</button>`).join('')}</div></div>`:''}
@@ -638,7 +650,7 @@ function vCarrito(){
   const item = i => { const ix = S.cart.indexOf(i), p = P(i.pid); return `
       <div class="citem"><div class="th">${img(p,i.ci)}</div>
         <div style="min-width:0"><span class="brandname">${esc(p.brand)}</span><div style="font-weight:600">${esc(p.name)}</div>
-          <div class="muted small">${esc(i.color)}${i.storage?' · '+esc(i.storage):''} · ${usd(i.unit)} c/u</div>
+          <div class="muted small">${esc(i.color)}${i.storage?' · '+esc(i.storage):''}${i.acc?' · Con accesorios':''} · ${usd(i.unit)} c/u</div>
           ${i.qty>p.stock?`<div class="err">Solo quedan ${p.stock} unidades</div>`:''}
           <div class="row" style="margin-top:6px"><div class="qty"><button data-act="cqty" data-i="${ix}" data-d="-1" aria-label="Menos">−</button><span class="num">${i.qty}</span><button data-act="cqty" data-i="${ix}" data-d="1" aria-label="Más">+</button></div>
           <button class="link small" data-act="crem" data-i="${ix}">Eliminar</button></div></div>
@@ -655,7 +667,7 @@ function vCarrito(){
       ${items.map(item).join('')}
       <div class="cg-f"><div><div class="sl tot"><span>Total ${esc(ST(g).name)}</span><span class="num">${usd(t.subtotal-t.discount)}</span></div>
         ${t.discount?`<div class="small" style="color:var(--ok)">Cupón ${esc(S.coupon)} aplicado (−${usd(t.discount)})</div>`:''}
-        <div class="muted small">${bs((t.subtotal-t.discount)*S.cfg.tasa)} a la tasa del día · el envío se calcula al pagar</div>
+        <div class="muted small">En bolívares: ${bs(bsPrice(t.subtotal-t.discount))} · el envío se calcula al pagar</div>
         ${finNote(items, t)}</div>
         <button class="btn buy" data-act="tocheckout" data-s="${g}" ${bad?'disabled':''}>Pagar en ${esc(ST(g).name)}</button></div>
     </section>`; }).join('')}</div>
@@ -695,7 +707,7 @@ function vCheckout(){
   const el = fin ? eligibility(k.financed, co.store) : null;
   if(el && needV){ el.ok = false; }
   const cur = METODOS[co.method].cur;
-  const hoyCur = cur==='Bs' ? bs(r2(k.hoy*S.cfg.tasa)) : usd(k.hoy);
+  const hoyCur = cur==='Bs' ? bs(bsPrice(k.hoy)) : usd(k.hoy);
   const plans = cf.plans.length ? cf.plans : allPlans();
   const down = r2(k.base*co.ini);
   const cuotaDe = n => r2(r2((k.base-down)*(1+S.cfg.plans[n]))/n);
@@ -735,13 +747,15 @@ function vCheckout(){
 
     <section class="box"><h2><span class="stepn">3</span>${fin?'Pago de la inicial':'Pago'}</h2>
       <div class="seg seg4">${Object.keys(METODOS).map(key=>`<label class="so"><input type="radio" name="met" value="${key}" data-on="method" ${co.method===key?'checked':''}><span class="ot">${short[key]}</span><span class="os">${key==='usdt'?'Binance':METODOS[key].cur==='Bs'?'Bolívares':'Dólares'}</span></label>`).join('')}</div>
-      <div class="bankdata"><span class="muted small">Datos para pagar a ${esc(tS.name)}</span><span>${esc(payTxt)}</span><span>Monto: <b class="num">${hoyCur}</b>${cur==='Bs'?` <span class="muted">(${usd(k.hoy)})</span>`:''}</span></div>
+      <div class="bankdata"><span class="muted small">Datos para pagar a ${esc(tS.name)}</span><span>${esc(payTxt)}</span></div>
+      ${dualBox(k.hoy, co.method)}
+      <div class="small">Vas a pagar con <b>${short[co.method]}</b>: <b class="num">${hoyCur}</b></div>
       ${co.method==='efectivo'?`<div class="note info small">Al confirmar, ${esc(tS.name)} te escribe por WhatsApp para coordinar el pago en efectivo. Guardamos tus productos ${S.cfg.reservaHoras} horas.</div>`
         :`<label class="ck small"><input type="checkbox" data-on="later" ${co.later?'checked':''}>Pagaré después (guardamos tus productos ${S.cfg.reservaHoras} horas)</label>`}
       ${co.when==='ahora'?`<div class="fg">
         ${cur==='Bs'?`<div class="field"><label for="co-bank">Banco de origen</label><select id="co-bank" data-in="bank">${BANKS.map(b=>`<option ${co.bank===b?'selected':''}>${b}</option>`).join('')}</select></div>`:''}
         <div class="field"><label for="co-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="co-ref" data-in="ref" value="${esc(co.ref)}" placeholder="${cur==='Bs'?'Ej. 00418833':'ID de la orden en Binance'}"></div>
-        <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?r2(k.hoy*S.cfg.tasa):k.hoy}"></div>
+        <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?bsPrice(k.hoy):k.hoy}"></div>
         <div class="field"><label for="co-file">Comprobante</label><input id="co-file" type="file" accept="image/*,application/pdf" data-on="file"><span class="hint">${co.file?'Archivo listo: '+esc(co.file.name):'Captura o PDF del pago. Máximo 5 MB.'}</span></div>
       </div>`:''}
     </section>
@@ -790,7 +804,7 @@ function terminosHTML(t){
   return `<div class="terms-txt">
     <h3>Al comprar en ${esc(t.name)}</h3>
     <ol>
-      <li><b>Equipos nuevos y usados.</b> En la ficha de cada teléfono se indica si es nuevo o usado y el estado de la batería.</li>
+      <li><b>Condición del equipo.</b> En la ficha de cada teléfono se indica si es nuevo o usado (Clase A, B o C, según su estado) y el estado de la batería.</li>
       <li><b>Garantía.</b> ${esc(t.garCubre)} <b>No se aceptan como garantía:</b> ${esc(t.garExcluye.charAt(0).toLowerCase()+t.garExcluye.slice(1))}</li>
       <li><b>Revisión al entregar.</b> El equipo se revisa contigo al momento de la entrega (pantalla, cornetas, Face ID, pin de carga, botones y liberación).</li>
       <li><b>Pagos.</b> Pago móvil, transferencia, USDT (Binance) o efectivo. Los pagos con comprobante se verifican antes de enviar el equipo. El efectivo lo registra la tienda cuando lo recibe.</li>
@@ -933,7 +947,10 @@ function vAdmin(){
   const toShip = S.orders.filter(inAdm).filter(o=>['preparando','listo_retiro','pendiente_pago'].includes(o.st));
   const low = S.products.filter(inAdm).filter(p=>p.stock<=5);
   const tabs = [['resumen','Resumen',0],['pagos','Pagos por verificar',pend.length],['creditos','Créditos y cuotas',mora.length],['ventas','Ventas',0],['pedidos','Pedidos y envíos',toShip.length],['clientes','Clientes',admCuo()?admUsers().filter(x=>x.verif==='pendiente').length:0],['encargos','Encargos',S.encs.filter(inAdm).filter(e=>e.estado==='nuevo').length],['postulaciones','Postulaciones',admPosts().filter(p=>p.estado==='nueva').length],['inventario','Inventario',low.length],['config','Configuración',0],['bitacora','Historial de cambios',0]].filter(([k])=>k!=='creditos'||admCuo());
-  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, ventas:aVentas, inventario:aInventario, clientes:aClientes, encargos:aEncargos, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora}[S.adm==='creditos'&&!admCuo()?'resumen':S.adm] || aResumen;
+  // Papa's Store ve el financiamiento de Priority One (solo lectura)
+  const finSt = S.stores.filter(x=>x.cuotas);
+  if(!admCuo() && finSt.length) tabs.splice(3, 0, ['finotra', 'Financiamiento '+finSt.map(x=>x.name).join(' / '), 0]);
+  const fn = {resumen:aResumen, pagos:aPagos, creditos:aCreditos, pedidos:aPedidos, ventas:aVentas, inventario:aInventario, clientes:aClientes, encargos:aEncargos, postulaciones:aPostulaciones, config:aConfig, bitacora:aBitacora, finotra:()=>aCreditos(true)}[S.adm==='creditos'&&!admCuo()?'resumen':S.adm] || aResumen;
   const t = myStore() ? ST(myStore()) : null;
   return `<div class="panel"><nav class="side"><div class="who">${t?`<div class="row" style="gap:8px">${storeMark(t,28)}<b>${esc(t.name)}</b></div>`:'<b>Administración general</b>'}<div class="muted small">${esc(u.name)}</div></div>
     ${isGenAdmin()?`<div class="field" style="margin:4px 0 8px"><label for="adm-st" class="small">Ver tienda</label><select id="adm-st" data-on="admstore"><option value="0">Las dos tiendas</option>${S.stores.map(x=>`<option value="${x.id}" ${S.admStore===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>`:''}
@@ -1002,21 +1019,23 @@ function aPagos(){
     ${recent.length?`<div class="tbl"><table class="t"><thead><tr><th>Pago</th><th>Cliente</th><th>Concepto</th><th>Revisado</th><th>Estado</th><th class="r">Monto</th></tr></thead><tbody>
     ${recent.map(p=>`<tr><td>${p.code}</td><td>${esc(U(p.userId)?.name||'')}</td><td>${concept(p)}</td><td class="nw">${fdt(p.reviewedAt)}</td><td>${tag(p.status)}</td><td class="r num nw">${amtTxt(p)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">Todavía no hay pagos revisados.</p>'}`;
 }
-function aCreditos(){
+function aCreditos(ro=false){
   const f = S.admF.cred; const today = dayStart(S.today);
   const order = {en_mora:0, evaluacion:1, activo:2, liquidado:3, rechazado:4, cancelado:5};
-  const list = S.credits.filter(inAdm).filter(c=>f==='todos'||c.st===f).sort((a,b)=>(order[a.st]??9)-(order[b.st]??9));
-  return `<h1>Créditos y cuotas</h1>
-    <div class="chips">${['todos','en_mora','activo','evaluacion','liquidado'].map(k=>`<button class="chip" data-act="admf" data-g="cred" data-v="${k}" aria-pressed="${f===k}">${k==='todos'?'Todos':CRE[k]} <span class="num">(${k==='todos'?S.credits.filter(inAdm).length:S.credits.filter(inAdm).filter(c=>c.st===k).length})</span></button>`).join('')}</div>
+  const base = ro ? S.credits.filter(c=>ST(c.store)?.cuotas && c.store!==admStoreId()) : S.credits.filter(inAdm);
+  const list = base.filter(c=>f==='todos'||c.st===f).sort((a,b)=>(order[a.st]??9)-(order[b.st]??9));
+  return `<h1>${ro?'Financiamiento de '+esc(S.stores.filter(x=>x.cuotas).map(x=>x.name).join(' / ')):'Créditos y cuotas'}</h1>
+    ${ro?'<p class="muted small">Solo para consultar: los cobros, recordatorios y moras los maneja la tienda que dio el crédito.</p>':''}
+    <div class="chips">${['todos','en_mora','activo','evaluacion','liquidado'].map(k=>`<button class="chip" data-act="admf" data-g="cred" data-v="${k}" aria-pressed="${f===k}">${k==='todos'?'Todos':CRE[k]} <span class="num">(${k==='todos'?base.length:base.filter(c=>c.st===k).length})</span></button>`).join('')}</div>
     ${list.length?list.map(c=>{const mt=sum(c.cuotas.filter(q=>q.status!=='pagada'),q=>q.mora); return `<article class="ord"><div class="oh"><div class="meta">
-      <div><span>Crédito</span><b>${c.code}</b>${stCol(c.store)}</div><div><span>Cliente</span><button class="link" data-act="edo" data-u="${c.userId}">${esc(U(c.userId)?.name||'')}</button></div>
+      <div><span>Crédito</span><b>${c.code}</b>${stCol(c.store)}</div><div><span>Cliente</span>${ro?`<b>${esc(U(c.userId)?.name||'')}</b>`:`<button class="link" data-act="edo" data-u="${c.userId}">${esc(U(c.userId)?.name||'')}</button>`}</div>
       <div><span>Inicial</span><span class="num">${usd(c.down)} (${Math.round(c.iniPct*100)}%)</span></div><div><span>Financiado</span><span class="num">${usd(c.financed)}</span></div>
-      <div><span>Saldo</span><b class="num">${usd(saldo(c))}</b>${mt?` <span class="mora small">incl. ${usd(mt)} mora</span>`:''}</div></div><div class="row">${['activo','en_mora','liquidado'].includes(c.st)?`<button class="btn sm ${c.contrato?'':'brand'}" data-act="contrato" data-c="${c.id}">${c.contrato?'Contrato':'Preparar contrato'}</button>`:''}${tag(c.status)}</div></div>
+      <div><span>Saldo</span><b class="num">${usd(saldo(c))}</b>${mt?` <span class="mora small">incl. ${usd(mt)} mora</span>`:''}</div></div><div class="row">${!ro&&['activo','en_mora','liquidado'].includes(c.st)?`<button class="btn sm ${c.contrato?'':'brand'}" data-act="contrato" data-c="${c.id}">${c.contrato?'Contrato':'Preparar contrato'}</button>`:''}${tag(c.status)}</div></div>
       <div class="ob2">${c.st==='evaluacion'?'<div class="muted small">La inicial está en “Pagos por verificar” (o el cliente aún no la sube). Al aprobarla se generan las cuotas desde esa fecha.</div>':['rechazado','cancelado'].includes(c.st)?'<div class="muted small">Sin cuotas.</div>':
       `<div class="tbl"><table class="t"><thead><tr><th>Cuota</th><th>Vence</th><th class="r">Monto</th><th class="r">Mora</th><th>Estado</th><th></th></tr></thead><tbody>
       ${c.cuotas.map(q=>{const late=q.status!=='pagada'&&q.due<today; return `<tr><td>${q.n}/${c.n}</td><td class="nw">${fd(q.due)}</td><td class="r num">${usd(q.amount)}</td><td class="r num">${q.mora?`<span class="mora">${usd(q.mora)}</span>`:'—'}</td>
       <td>${q.status==='pagada'?`<span class="tag ok">Pagada ${fd(q.paidAt)}</span>`:q.status==='en_revision'?'<span class="tag warn">En revisión</span>':late?`<span class="tag bad">Vencida · ${days(q.due,S.today)} días</span>`:'<span class="tag">Pendiente</span>'}</td>
-      <td class="nw">${q.status==='pendiente'?cuotaWa(c,q)+` <button class="btn sm" data-act="cajacuota" data-q="${q.id}">Registrar efectivo</button>`:''} ${q.mora&&q.status!=='pagada'?`<button class="btn sm" data-act="condonar" data-q="${q.id}">Condonar mora</button>`:''}</td></tr>`}).join('')}
+      <td class="nw">${ro?'':q.status==='pendiente'?cuotaWa(c,q)+` <button class="btn sm" data-act="cajacuota" data-q="${q.id}">Registrar efectivo</button>`:''} ${!ro&&q.mora&&q.status!=='pagada'?`<button class="btn sm" data-act="condonar" data-q="${q.id}">Condonar mora</button>`:''}</td></tr>`}).join('')}
       </tbody></table></div>`}</div></article>`}).join(''):'<div class="empty">No hay créditos en este filtro.</div>'}`;
 }
 const VENDIDO = ['preparando','listo_retiro','enviado','entregado'];
@@ -1179,8 +1198,11 @@ function productModal(id){
       <div class="field"><label for="pf-cat">Categoría</label><select id="pf-cat">${CATS.map(c=>`<option ${p?.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="field"><label for="pf-pre">Precio (USD)</label><input id="pf-pre" inputmode="decimal" value="${p?p.price:''}"></div>
       ${p?'':`<div class="field"><label for="pf-stk">Unidades disponibles</label><input id="pf-stk" inputmode="numeric" data-digits="4" value="1"></div>`}
-      <div class="field"><label for="pf-cond">Condición</label><select id="pf-cond"><option value="nuevo" ${p?.cond!=='usado'?'selected':''}>Nuevo</option><option value="usado" ${p?.cond==='usado'?'selected':''}>Usado</option></select></div>
+      <div class="field"><label for="pf-cond">Condición</label><select id="pf-cond">${Object.entries(CONDS).filter(([k])=>k!=='usado'||p?.cond==='usado').map(([k,v])=>`<option value="${k}" ${(p?.cond||'nuevo')===k?'selected':''}>${v}</option>`).join('')}</select></div>
+      <div class="field"><label for="pf-gama">Gama</label><select id="pf-gama">${Object.entries(GAMAS).map(([k,v])=>`<option value="${k}" ${(p?.gama||'media')===k?'selected':''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label for="pf-bat">Batería (%) <span class="muted">(opcional)</span></label><input id="pf-bat" inputmode="numeric" data-digits="3" value="${p?.bat??''}" placeholder="Ej. 90"></div>
+      <div class="field"><label for="pf-acc">Precio extra con accesorios (USD) <span class="muted">(opcional)</span></label><input id="pf-acc" inputmode="decimal" value="${p?.acc??''}" placeholder="Vacío = no se ofrece"><span class="hint">Si lo llenas, el cliente elige con o sin accesorios.</span></div>
+      <div class="field"><label for="pf-accd">Qué accesorios incluye</label><input id="pf-accd" value="${esc(p?.accDesc||'')}" placeholder="Ej. Cargador, forro y vidrio templado"></div>
       <div class="field" hidden><label for="pf-gar">Garantía</label><input id="pf-gar" inputmode="numeric" data-digits="2" value="${p?.gar??''}" placeholder="Ej. 2"></div>
       <div class="field"><label for="pf-col">Colores <span class="muted">(separados por coma)</span></label><input id="pf-col" value="${esc(p?p.colors.map(c=>c.n).join(', '):'')}" placeholder="Ej. Negro, Titanio, Blanco"></div>
       <div class="field" style="grid-column:1/-1"><label for="pf-cap">Capacidades <span class="muted">(opcional; precio extra con +)</span></label><input id="pf-cap" value="${esc(capTxt)}" placeholder="Ej. 256 GB, 512 GB +150"></div>
@@ -1228,7 +1250,9 @@ async function saveProduct(){
     descripcion:$('#pf-des').value.trim(), imagen_url:imagen, financiable:$('#pf-fin')?$('#pf-fin').checked:false, activo:$('#pf-act').checked};
   const bat = $('#pf-bat').value.trim(), gar = $('#pf-gar').value.trim();
   if(bat && !(+bat>=1 && +bat<=100)){ err.textContent = 'La batería debe estar entre 1 y 100%.'; return; }
-  const equipo = {condicion:$('#pf-cond').value, bateria:bat, garantia_meses:''};
+  const accv = $('#pf-acc').value.trim();
+  if(accv && !(parseAmt(accv)>0)){ err.textContent = 'El precio extra de los accesorios debe ser mayor a 0.'; return; }
+  const equipo = {condicion:$('#pf-cond').value, gama:$('#pf-gama').value, bateria:bat, garantia_meses:'', accesorios_extra: accv ? String(parseAmt(accv)) : '', accesorios_desc:$('#pf-accd').value.trim()};
   if($('#pf-cs')){ equipo.cuotas_semanal = $('#pf-cs').value; equipo.cuotas_quincenal = $('#pf-cq').value;
     if($('#pf-fin').checked && !equipo.cuotas_semanal && !equipo.cuotas_quincenal){ err.textContent = 'Permite cuotas semanales, quincenales o ambas, o desmarca “Se puede pagar en cuotas”.'; return; } }
   let finIni = null, finPlans = null;
@@ -1272,7 +1296,8 @@ function aConfig(){
   <section class="box"><h2>${admCuo()?'Configuración común':'Tasa del día'}</h2><p class="muted small">${admCuo()?'Aplica a las dos tiendas: la tasa del día, la mora y los planes de cuotas. Cualquier administrador puede cambiarla y queda registrado en el historial de cambios.':'Es la misma para las dos tiendas. El cambio queda registrado en el historial de cambios.'}</p>
     <form id="cfgf" class="field" style="gap:16px">
     <div class="fg">
-      <div class="field"><label for="c-tasa">Tasa del día (Bs por USD)</label><input id="c-tasa" inputmode="decimal" value="${c.tasa}"><span class="hint">Se usa para convertir pagos en bolívares. Actualízala a diario.</span></div>
+      <div class="field"><label for="c-tasa">Tasa para pagos en bolívares (Bs por USD)</label><input id="c-tasa" inputmode="decimal" value="${c.tasa}"><span class="hint">No se muestra en la página; se usa para calcular el monto en Bs. Actualízala a diario.</span></div>
+      <div class="field"><label for="c-rbs">Ajuste para pagos en bolívares (%)</label><input id="c-rbs" inputmode="decimal" value="${r2((c.recargoBs||0)*100)}"><span class="hint">Monto en Bs = precio en dólares + este % × tasa. Pon 0 si es el mismo precio.</span></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-mora">Cargo fijo por mora (USD)</label><input id="c-mora" inputmode="decimal" value="${c.mora}"><span class="hint">Se aplica una vez por cada cuota vencida.</span></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-ini">Inicial mínima (%)</label><input id="c-ini" inputmode="numeric" value="${Math.round(c.inicialMin*100)}"></div>
       <div class="field" ${admCuo()?'':'hidden'}><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
@@ -1683,11 +1708,12 @@ function payModal(ctx){
     ${M.store?`<p class="muted small" style="margin:-4px 0 0">¿Vas a pagar en efectivo? Escríbele a ${esc(ST(M.store).name)} por WhatsApp: la tienda lo registra cuando lo recibe.</p>`:''}
     <div class="field"><label for="pm-met">Método</label><select id="pm-met" data-on="pmmet">${Object.entries(METODOS).filter(([k])=>METODOS_COMP.includes(k)).map(([k,m])=>`<option value="${k}" ${M.method===k?'selected':''}>${m.n}</option>`).join('')}</select></div>
     <div class="bankdata">${M.store?`<span class="muted small">Datos para pagar a ${esc(ST(M.store).name)}</span>`:''}${payInfo(M.method, M.store)}
-      <span>Monto: <b class="num">${cur==='Bs'?bs(r2(M.amount*S.cfg.tasa)):usd(M.amount)}</b>${cur==='Bs'?` <span class="muted">(${usd(M.amount)})</span>`:''}</span></div>
+</div>
+    ${dualBox(M.amount, M.method)}
     <form id="payf" class="fg" novalidate>
       ${cur==='Bs'?`<div class="field"><label for="pm-bank">Banco de origen</label><select id="pm-bank">${BANKS.map(b=>`<option>${b}</option>`).join('')}</select></div>`:''}
       <div class="field"><label for="pm-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="pm-ref"></div>
-      <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?r2(M.amount*S.cfg.tasa):M.amount}"></div>
+      <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?bsPrice(M.amount):M.amount}"></div>
       <div class="field"><label for="pm-file">Comprobante (imagen o PDF)</label><input id="pm-file" type="file" accept="image/*,application/pdf"></div>
       <div class="err" id="pm-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="submitpay">Enviar comprobante</button>`);
@@ -1708,7 +1734,7 @@ function reviewModal(id){
     <div class="rcpt"><div id="rc-img" class="muted small">${p.path?'Cargando comprobante…':'Sin imagen adjunta.'}</div>
       <dl class="dl"><dt>Cliente</dt><dd>${esc(u.name)}<div class="muted small">${esc(u.cedula)} · ${esc(u.phone)}</div></dd><dt>Concepto</dt><dd>${concept(p)}</dd>
         <dt>Método</dt><dd>${metN(p.method)}${p.bank?' · '+esc(p.bank):''}</dd><dt>Referencia</dt><dd>${esc(p.ref)}</dd><dt>Recibido</dt><dd>${fdt(p.created)}</dd>
-        <dt>Esperado</dt><dd class="num">${usd(p.expected)}${p.currency==='Bs'?` · ${bs(r2(p.expected*p.tasa))}`:''}</dd><dt>Reportado</dt><dd class="num">${amtTxt(p)}</dd>${p.currency==='Bs'?`<dt>Tasa usada</dt><dd>${bs(p.tasa)}</dd>`:''}${extra}</dl></div>
+        <dt>Esperado</dt><dd class="num">${usd(p.expected)}${p.currency==='Bs'?` · ${bs(r2(p.expected*(1+(p.recargo||0))*p.tasa))}`:''}</dd><dt>Reportado</dt><dd class="num">${amtTxt(p)}</dd>${p.currency==='Bs'?`<dt>Tasa usada</dt><dd>${bs(p.tasa)}</dd>`:''}${extra}</dl></div>
     <div class="field"><label for="rv-note">Motivo si rechazas</label><select id="rv-note"><option>La referencia no aparece en el banco</option><option>El monto recibido es incompleto</option><option>La imagen no es legible</option><option>El titular no coincide con el cliente</option>${p.kind==='inicial'?'<option>No pudimos verificar la identidad del cliente</option>':''}</select></div>`,
     `${p.kind==='inicial'?`<button class="btn danger" data-act="rejcredit" data-p="${p.id}">Rechazar crédito</button>`:''}<button class="btn danger" data-act="rejpay" data-p="${p.id}">Rechazar comprobante</button><button class="btn buy" data-act="approve" data-p="${p.id}">${short?okL+' de todos modos':okL}</button>`, true);
   if(p.path) sb.storage.from('comprobantes').createSignedUrl(p.path, 600).then(({data, error})=>{
@@ -1762,7 +1788,7 @@ function route(){
   const [v, id] = decodeURIComponent(location.hash.slice(1)).split('/');
   const prev = S.route;
   S.route = {v: v || 'inicio', id: id ? +id : undefined};
-  if(S.route.v==='producto' && (prev.v!=='producto' || prev.id!==S.route.id)) S.pd = {color:0, storage:0, qty:1};
+  if(S.route.v==='producto' && (prev.v!=='producto' || prev.id!==S.route.id)) S.pd = {color:0, storage:0, qty:1, acc:false};
   if(S.route.v==='encargo' && prev.v!=='encargo' && S.enc?.done) S.enc = null;
   closeModal(); render(); window.scrollTo(0,0);
 }
@@ -1786,16 +1812,16 @@ async function afterLogin(){
   if(a) return go(a);
   go('cuenta');
 }
-function addToCart(pid, ci, si, qty){
-  const p = P(pid); const key = `${pid}-${ci}-${si}`;
+function addToCart(pid, ci, si, qty, acc=false){
+  const p = P(pid); acc = !!acc && p.acc!=null; const key = `${pid}-${ci}-${si}${acc?'-a':''}`;
   const inCart = sum(S.cart.filter(i=>i.pid===pid), i=>i.qty);
   if(inCart + qty > p.stock){ toast(`Solo hay ${p.stock} unidades disponibles de ${p.name}.`); return false; }
   const it = S.cart.find(i=>i.key===key);
-  if(it) it.qty += qty; else S.cart.push({key, pid, ci, si, qty, name:p.name, color:p.colors[ci]?.n, storage:p.storages?p.storages[si].n:null, unit:unitPrice(p,si)});
+  if(it) it.qty += qty; else S.cart.push({key, pid, ci, si, qty, name:p.name, color:p.colors[ci]?.n, storage:p.storages?p.storages[si].n:null, acc, unit:unitPrice(p,si,acc)});
   S.co = null; saveCart(); return true;
 }
 function syncCartPrices(){ // actualiza precios guardados en el carrito con los del catálogo
-  S.cart.forEach(i=>{ const p=P(i.pid); if(p) i.unit = unitPrice(p, i.si); });
+  S.cart.forEach(i=>{ const p=P(i.pid); if(p){ if(p.acc==null) i.acc = false; i.unit = unitPrice(p, i.si, i.acc); } });
   S.cart = S.cart.filter(i=>P(i.pid)); saveCart();
 }
 
@@ -1841,12 +1867,12 @@ async function placeOrder(){
     const cur = METODOS[co.method].cur;
     const ref = co.ref.trim();
     if(cur==='Bs' ? !/^\d{6,}$/.test(ref) : !/^[A-Za-z0-9]{6,}$/.test(ref)) return fail(cur==='Bs' ? 'La referencia debe tener al menos 6 dígitos.' : 'El ID de la orden de Binance debe tener al menos 6 caracteres.');
-    const amt = parseAmt(co.amount || (cur==='Bs' ? r2(k.hoy*S.cfg.tasa) : k.hoy));
+    const amt = parseAmt(co.amount || (cur==='Bs' ? bsPrice(k.hoy) : k.hoy));
     if(!(amt>0)) return fail('Escribe el monto que pagaste.');
     if(!co.file) return fail('Adjunta la imagen o PDF del comprobante.');
     pago = {banco: cur==='Bs' ? co.bank : '', referencia: ref, monto_reportado: amt, comprobante_path: await uploadProof(co.file)};
   }
-  const payload = { items: items.map(i=>({producto_id:i.pid, color_idx:i.ci, cap_idx:i.si, cantidad:i.qty})),
+  const payload = { items: items.map(i=>({producto_id:i.pid, color_idx:i.ci, cap_idx:i.si, cantidad:i.qty, accesorios:!!i.acc})),
     modalidad: co.mode, n_cuotas: co.n, frecuencia: co.mode==='financiado' ? co.freq : null, acepta_terminos: true, inicial_pct: co.ini, envio_metodo: co.ship, direccion: co.addr, ciudad: co.city,
     metodo_pago: co.method, cupon: k.couponOk ? S.coupon : '', pago };
   try{
@@ -1915,8 +1941,9 @@ const ACT = {
   pstor: d => { S.pd.storage = +d.i; render(); },
   pqty: d => { const p = P(S.route.id); S.pd.qty = Math.max(1, Math.min(p.stock, S.pd.qty + +d.d)); render(); },
   add: d => { const pid=+d.id; const onPd = S.route.v==='producto' && S.route.id===pid;
-    if(addToCart(pid, onPd?S.pd.color:0, onPd?S.pd.storage:0, onPd?S.pd.qty:1)){ renderChrome(); toast(`${P(pid).name} agregado al carrito.`); } },
-  buynow: d => { if(addToCart(+d.id, S.pd.color, S.pd.storage, S.pd.qty)) go('carrito'); },
+    if(addToCart(pid, onPd?S.pd.color:0, onPd?S.pd.storage:0, onPd?S.pd.qty:1, onPd&&S.pd.acc)){ renderChrome(); toast(`${P(pid).name} agregado al carrito.`); } },
+  buynow: d => { if(addToCart(+d.id, S.pd.color, S.pd.storage, S.pd.qty, S.pd.acc)) go('carrito'); },
+  pacc: d => { S.pd.acc = d.v==='1'; render(); },
   cqty: d => { const it = S.cart[+d.i]; const p = P(it.pid); const n = it.qty + +d.d;
     if(n > it.qty && sum(S.cart.filter(i=>i.pid===it.pid),i=>i.qty) >= p.stock){ toast(`Solo hay ${p.stock} unidades disponibles.`); return; }
     it.qty = n; if(it.qty<=0) S.cart.splice(+d.i,1); S.co=null; saveCart(); render(); },
@@ -2014,7 +2041,7 @@ document.addEventListener('change', async e=>{
   if(on==='prodimg'){ M.file = t.files[0] || null; if(M.file){ const u = URL.createObjectURL(M.file); $('#pf-prev').innerHTML = `<img src="${u}" alt="" style="width:100%;height:100%;object-fit:contain">`; } return; }
   if(on==='logoimg'){ S.logoFile = t.files[0] || null; if(S.logoFile){ $('#tf-logo').innerHTML = `<img class="smark" src="${URL.createObjectURL(S.logoFile)}" alt="" style="height:64px">`; } return; }
   if(on==='fbrand'){ f.brands = t.checked ? [...f.brands, t.value] : f.brands.filter(b=>b!==t.value); }
-  if(on==='fmax') f.max = t.value;
+  if(on==='fgama') f.gama = t.value;
   if(on==='fstock') f.stock = t.checked;
   if(on==='fsort') f.sort = t.value;
   if(on==='ship') S.co.ship = t.value;
@@ -2061,8 +2088,8 @@ document.addEventListener('submit', e=>{
       else if(planes[nn]!==undefined) bad = `El plan de ${nn} cuotas está repetido.`; planes[nn] = r2(parseAmt(pv||'0')/100); });
     if($('#planes') && !bad && !Object.keys(planes).length) bad = 'Deja al menos un plan de cuotas.';
     if(bad){ $('#c-err').textContent = bad; return; }
-    const v = {tasa:n('c-tasa'), mora:n('c-mora'), inicial_min:r2(n('c-ini')/100), min_financiable:n('c-min'), cupo_base:n('c-cupo')}; if($('#planes')) v.planes = planes;
-    if(!(v.tasa>0) || !(v.mora>=0) || !(v.inicial_min>=0 && v.inicial_min<=0.9) || !(v.min_financiable>=0) || !(v.cupo_base>=0) || Object.values(planes).some(x=>!(x>=0&&x<=1))){
+    const v = {tasa:n('c-tasa'), recargo_bs:r2(n('c-rbs')/100), mora:n('c-mora'), inicial_min:r2(n('c-ini')/100), min_financiable:n('c-min'), cupo_base:n('c-cupo')}; if($('#planes')) v.planes = planes;
+    if(!(v.tasa>0) || !(v.recargo_bs>=0 && v.recargo_bs<=1) || !(v.mora>=0) || !(v.inicial_min>=0 && v.inicial_min<=0.9) || !(v.min_financiable>=0) || !(v.cupo_base>=0) || Object.values(planes).some(x=>!(x>=0&&x<=1))){
       $('#c-err').textContent='Revisa los valores: deben ser números válidos y los porcentajes entre 0 y 100.'; return; }
     await rpc('actualizar_config', {p:v}); await refresh(); toast('Configuración guardada.');
   });
