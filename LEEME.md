@@ -1,39 +1,22 @@
 # Priority One y Papa's Store: cómo poner la tienda en línea
 
-Una sola página para las dos tiendas. Los clientes usan una sola cuenta y compran en cualquiera de las dos; cada tienda tiene su propio catálogo, sus pedidos, sus créditos, sus datos de pago y su propio panel de administración.
+Una sola página con el catálogo de los dos comercios. Los clientes usan una sola cuenta; cada comercio tiene su catálogo, sus pedidos, sus créditos, su tasa, sus datos de pago y su propio panel de administración.
 
-Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tienen plan gratis).
+Costo: solo el dominio (Vercel y Supabase tienen plan gratis para empezar).
 
 ## Qué hay en esta carpeta
 
 | Carpeta / archivo | Para qué sirve |
 |---|---|
-| `tienda/` | La página web. Netlify publica esta carpeta (ver `netlify.toml`). |
-| `tienda/config.js` | Datos de conexión con Supabase. Lo demás se cambia desde el panel. |
-| `netlify.toml` | Le indica a Netlify que publique la carpeta `tienda` sin compilar nada. |
-| `supabase/instalar_todo.sql` | **Todo junto** (01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22 y 23) para ejecutarlo de una sola vez. |
-| `supabase/01_esquema.sql` | Crea la base de datos, la seguridad y toda la lógica: pedidos, créditos, cuotas, mora y pagos. |
-| `supabase/02_catalogo.sql` | Opcional: 11 productos de ejemplo. Si vas a cargar los reales desde el panel, sáltalo. |
+| `tienda/` | La página web. Vercel publica esta carpeta (Root Directory = `tienda`). |
+| `tienda/config.js` | Datos de conexión con Supabase (URL y Publishable key). Lo demás se cambia desde el panel. |
+| `tienda/vercel.json` | Cabeceras de seguridad de la página (CSP, HSTS, X-Frame-Options…). |
+| `supabase/instalar_todo.sql` | **Instalación completa**: tablas, funciones, seguridad (RLS) y reglas de negocio. Se puede ejecutar más de una vez. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
-| `supabase/05_actualizacion.sql` | Verificación de identidad, módulo “Trabaja con nosotros”, equipos solo de contado y cédula/teléfono solo con números. |
-| `supabase/06_ajustes.sql` | Verificación solo para comprar en cuotas y preguntas de empleo para ventas online. |
-| `supabase/08_formas_de_pago.sql` | Priority One vende en cuotas y de contado; Papa's Store solo de contado. Nuevos eslóganes. |
-| `supabase/10_cuotas_por_equipo.sql` | Inicial mínima y cuotas permitidas por cada equipo, desde el panel. |
-| `supabase/11_online_y_planes.sql` | Tiendas solo online (sin retiro ni efectivo) y planes de cuotas editables. |
-| `supabase/20_historial_cierre.sql` | El cierre diario se ve en el Historial de cambios de cada panel. |
-| `supabase/21_gama_accesorios_bs.sql` | Gama (baja/media/alta), condición Clase A/B/C, accesorios opcionales con precio extra, ajuste para pagos en bolívares, inicial general de 30% y Papa's Store puede consultar el financiamiento de Priority One. |
-| `supabase/22_seguridad.sql` | Refuerzo de seguridad: RLS activo en todas las tablas, sin escritura directa, visitantes solo ven catálogo y tiendas, funciones internas cerradas y archivos privados. |
-| `supabase/23_produccion_tasa_por_tienda.sql` | Acabado de producción: tasa y ajuste en Bs por tienda con historial, reglas de financiamiento solo para la tienda de cuotas, sin datos de ejemplo y registro de la aceptación de los Términos de uso y la Política de privacidad. |
-| `supabase/19_sexo.sql` | Sexo del cliente (masculino o femenino) en el registro. |
-| `supabase/18_garantia.sql` | Política de garantía de cada tienda (se edita en Configuración). |
-| `supabase/17_frecuencia_y_contrato.sql` | El cliente elige semanal o quincenal (según lo que permita cada equipo), términos antes de comprar y contrato imprimible. |
-| `supabase/16_pagos_usados_frecuencia.sql` | Pago móvil, transferencia, efectivo y USDT; equipos usados (batería, garantía); cuotas semanales o quincenales. |
-| `supabase/15_sin_cupo.sql` | Sin límite de monto para financiar. |
-| `supabase/14_sin_zelle.sql` | Solo pago móvil y transferencia (sin Zelle). |
-| `supabase/13_frases.sql` | Frases de portada según la forma de pago de cada tienda. |
-| `supabase/12_cuotas_fijas.sql` | El admin fija en cuántas cuotas se paga cada equipo; frases de confianza en la portada. |
-| `supabase/09_encargos.sql` | Encargos: el cliente pide un teléfono que no está en el catálogo o está agotado, a la tienda que elija. |
-| `supabase/07_multitienda.sql` | **Las dos tiendas**: crea Priority One y Papa's Store, separa catálogo, pedidos, créditos y pagos por tienda, y crea los paneles por tienda. |
+| `supabase/04_crear_admin.sql` | Convierte una cuenta registrada en administrador de una tienda. |
+| `supabase/historial/` | Las actualizaciones 01 a 23 por separado, en el orden en que se crearon. Solo como referencia: `instalar_todo.sql` ya las incluye. |
+
+Los datos de cada tienda (RIF, cuentas bancarias, cédulas, WhatsApp) **no** están en este repositorio: se cargan en la base de datos con el archivo SQL que se entrega aparte, o desde el panel.
 
 ---
 
@@ -50,11 +33,11 @@ Tiempo estimado: unos 45 minutos. Costo: solo el dominio (Netlify y Supabase tie
 
 1. En el menú de la izquierda abre **SQL Editor** y pulsa **New query**.
 2. Abre `supabase/instalar_todo.sql` con el Bloc de notas, copia **todo**, pégalo y pulsa **Run**. Debe decir *Success. No rows returned*.
-   (Si prefieres ir por partes, ejecuta en orden 01, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 y 20. Se pueden ejecutar más de una vez sin dañar nada.)
+   Si te entregaron el archivo con los datos de las tiendas (`supabase_proyecto_nuevo.sql`), ejecuta ese en lugar de este: trae todo junto.
 3. Ve a **Database → Extensions**, busca **pg_cron** y actívalo.
 4. Vuelve a **SQL Editor → New query** y ejecuta `supabase/03_tarea_diaria.sql`.
 
-No ejecutes `02_catalogo.sql` en la tienda real: son productos de ejemplo.
+La instalación no trae productos, cupones ni tasas de ejemplo: todo lo carga cada tienda desde su panel.
 
 Desde ahora, todas las noches a las 00:05 (hora de Venezuela) el sistema:
 - aplica la mora a las cuotas vencidas;
@@ -78,26 +61,31 @@ Así los clientes entran apenas se registran. El correo gratuito de Supabase sol
 
 > ⚠️ Nunca pegues en `config.js` la **Secret key**, la **service_role** ni la contraseña de la base de datos. La Publishable key sí puede ser pública: la seguridad la ponen las reglas de la base de datos.
 
-## Paso 5. Publicar la página en Netlify
+## Paso 5. Publicar la página en Vercel (despliegue automático)
 
-1. Entra a **netlify.com** y crea una cuenta gratis (puedes entrar con tu correo o con GitHub).
-2. Opción fácil, sin GitHub: ve a **Sites → Add new site → Deploy manually** y arrastra la carpeta **`tienda`** completa a la ventana.
-   Opción con GitHub: **Add new site → Import an existing project**, elige el repositorio y deja todo como viene (Netlify lee `netlify.toml`).
-3. En menos de un minuto tendrás una dirección como `https://priority-papas.netlify.app`.
-4. Para cambiar el nombre de esa dirección: **Site configuration → Change site name**.
+1. Entra a **vercel.com** con tu cuenta de GitHub.
+2. Pulsa **Add New → Project** e importa este repositorio.
+3. Configura:
+   - **Framework Preset:** Other
+   - **Root Directory:** `tienda`
+   - **Build Command** y **Output Directory:** vacíos
+   - No hace falta ninguna variable de entorno.
+4. Pulsa **Deploy**. En menos de un minuto tendrás una dirección `https://….vercel.app`.
 
-Si usas la opción de arrastrar, cada vez que cambies un archivo vuelve a arrastrar la carpeta en **Deploys**. Con GitHub se publica solo.
+Desde ese momento, **cada cambio que se suba a la rama `main` se publica solo**.
+
+> El plan gratuito de Vercel (Hobby) es para uso no comercial. Para una tienda que vende, usa el plan Pro o publica la carpeta `tienda` en Cloudflare Pages (gratis para uso comercial, mismo despliegue automático desde GitHub).
 
 ## Paso 6. Conectar tu dominio y decirle a Supabase cuál es tu página
 
 **Dominio (comprado en Namecheap u otro):**
-1. En Netlify: **Domain management → Add a domain**, escribe tu dominio (ej. `tutienda.com`) y sigue los pasos.
-2. Netlify te mostrará los **nameservers** (4 direcciones tipo `dns1.p01.nsone.net`). En Namecheap ve a **Domain List → Manage → Nameservers → Custom DNS**, pégalos y guarda.
+1. En Vercel: **Project → Settings → Domains → Add**, escribe tu dominio (ej. `prioritynstore.com`) y también `www.prioritynstore.com`.
+2. Vercel te muestra los registros que debes crear (un registro **A** para el dominio y un **CNAME** para `www`). En Namecheap ve a **Domain List → Manage → Advanced DNS** y créalos**, pégalos y guarda.
 3. En unas horas (máximo 24) la tienda abre en tu dominio, con candado (HTTPS) gratis.
 
 **Supabase:**
 1. Ve a **Authentication → URL Configuration**.
-2. En **Site URL** pega tu dirección final (tu dominio, o la de Netlify mientras tanto).
+2. En **Site URL** pega tu dirección final (tu dominio, o la de Vercel mientras tanto).
 3. En **Redirect URLs** agrega la misma dirección y guarda.
 
 Esto hace que los enlaces de "recuperar contraseña" lleven a tu tienda.
@@ -125,7 +113,9 @@ En **Panel → Configuración**, cada admin completa los **datos de su tienda**:
 - Las **2 frases de la portada** que aparecen junto al teléfono animado.
 - Sus **datos para recibir pagos** (pago móvil, transferencia, USDT de Binance y cómo se paga en efectivo). Son los que ve el cliente al pagarle a esa tienda.
 
-Más abajo está la **configuración común**: tasa del día (actualízala cada día), mora, inicial mínima, cupo inicial y las **opciones de cuotas** con su recargo (Papa's Store solo ve la tasa del día).
+Debajo está la **tasa para pagos en bolívares** de esa tienda: cada tienda publica la suya cada día, junto con el ajuste (%) para pagos en bolívares. Mientras una tienda no publique su tasa, sus clientes solo pueden pagar en dólares (USDT o efectivo). Cada cambio queda en el historial de tasas.
+
+La tienda que vende en cuotas ve además las **reglas de financiamiento**: mora, inicial mínima y opciones de cuotas.
 
 ## Paso 9. Cargar los productos
 
@@ -172,13 +162,22 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
 
 | Mensaje | Solución |
 |---|---|
-| "Falta conectar la tienda" | Revisa el Paso 4: faltan la URL o la clave en `config.js`, o no volviste a subir la carpeta a Netlify. |
-| "No se pudo conectar con la base de datos" | Revisa el Paso 2: no se ejecutó `01_esquema.sql`, o la clave está mal copiada. |
+| "Falta conectar la tienda" | Revisa el Paso 4: faltan la URL o la clave en `config.js`, o el cambio no se subió a la rama `main`. |
+| "No se pudo conectar con la base de datos" | Revisa el Paso 2: no se ejecutó `instalar_todo.sql`, o la clave está mal copiada. |
 | "Esa cédula ya está registrada" | Ya existe una cuenta con esa cédula. El cliente debe usar "¿Olvidaste tu contraseña?". |
 | No veo el botón Panel | Revisa el Paso 7 y vuelve a iniciar sesión. |
-| "No se encontraron las tiendas" | Falta ejecutar `supabase/07_multitienda.sql`. |
+| "No se encontraron las tiendas" | Falta ejecutar `supabase/instalar_todo.sql`. |
 | "Esta operación es de otra tienda" | Ese pago, pedido o producto pertenece a la otra tienda. Solo su admin (o el admin general) puede tocarlo. |
 | "Cada tienda se paga por separado" | El cliente intentó pagar productos de las dos tiendas juntos. Debe pagar desde el carrito cada tienda aparte. |
 | No llegan correos | Revisa el Paso 3. El correo gratuito de Supabase tiene un límite bajo por hora. |
 | “Para comprar en cuotas primero verifica tu identidad” | El cliente debe entrar a **Mi cuenta → Verificación** y enviar sus documentos. |
 | No se aplican las moras | Revisa que activaste **pg_cron** y ejecutaste `03_tarea_diaria.sql`. |
+| El cliente no ve pago móvil ni transferencia | Esa tienda no ha publicado su tasa o no tiene cargados esos datos de pago (Panel → Configuración). |
+
+## Páginas legales
+
+La página incluye **Términos de uso** (`#terminos`) y **Política de privacidad** (`#privacidad`), enlazadas en el pie. Usan los datos de cada tienda (nombre, RIF, WhatsApp, garantía, mora). Al registrarse, el cliente las acepta y queda guardado con fecha y versión. Si cambias su contenido, sube la versión en `LEGAL_VERSION` (app.js) y a los clientes se les pedirá aceptarla de nuevo. Conviene que un abogado las revise antes del lanzamiento.
+
+## Si cambias de proyecto de Supabase
+
+Cambia la URL y la Publishable key en `tienda/config.js`. La política de seguridad de `tienda/vercel.json` ya permite cualquier proyecto `*.supabase.co`.

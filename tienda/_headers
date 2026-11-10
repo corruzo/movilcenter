@@ -1,8 +1,0 @@
-# Cabeceras para Cloudflare Pages (y Netlify): los archivos de la tienda siempre en su última versión
-/*
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-/*.js
-  Cache-Control: no-cache
-/*.css
-  Cache-Control: no-cache

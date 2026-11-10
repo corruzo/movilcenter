@@ -1,5 +1,5 @@
 /* =====================================================================
-   MovilCenter · Tienda en línea conectada a Supabase
+   Priority One y Papa's Store · Tienda en línea conectada a Supabase
    No necesitas editar este archivo: la configuración está en config.js
    ===================================================================== */
 'use strict';
@@ -202,9 +202,9 @@ async function q(table, order){
 async function loadPublic(){
   const [prods, cfg, tds] = await Promise.all([q('productos', ['orden']), q('configuracion'), q('tiendas', ['orden'])]);
   S.stores = tds.filter(t=>t.activo!==false).map(mapStore);
-  if(!S.stores.length) throw new Error('No se encontraron las tiendas. ¿Ejecutaste el archivo 07_multitienda.sql en Supabase?');
+  if(!S.stores.length) throw new Error('No se encontraron las tiendas. ¿Ejecutaste supabase/instalar_todo.sql en Supabase?');
   S.products = prods.map(mapProduct);
-  if(!cfg[0]) throw new Error('No se encontró la configuración. ¿Ejecutaste el archivo 01_esquema.sql en Supabase?');
+  if(!cfg[0]) throw new Error('No se encontró la configuración. ¿Ejecutaste supabase/instalar_todo.sql en Supabase?');
   S.cfg = mapCfg(cfg[0]);
 }
 async function loadPrivate(){
