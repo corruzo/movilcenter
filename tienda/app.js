@@ -290,7 +290,7 @@ function coCalc(){
   t.items = t.items || [];
   const k = {...t, base, ship, total: r2(base+ship)};
   if(co.mode==='financiado'){
-    k.down = r2(base*co.ini); k.financed = r2((base-k.down)*(1+S.cfg.plans[co.n])); k.cuota = r2(k.financed/co.n);
+    k.down = r2(base*co.ini); k.financed = r2((base-k.down)*(1+rec(co.n))); k.cuota = r2(k.financed/co.n);
     k.hoy = r2(k.down + ship); k.costoTotal = r2(k.down + k.financed + ship);
   } else k.hoy = k.total;
   return k;
@@ -301,13 +301,15 @@ const BADGE = {'Pendiente de pago':'warn','Pago en revisión':'warn','Crédito e
   'Activo':'info','En mora':'bad','Liquidado':'ok','En evaluación':'warn','Rechazado':'bad', pendiente:'warn', verificado:'ok', aprobado:'ok', rechazado:'bad'};
 const LABEL = {pendiente:'Por verificar', verificado:'Verificado', aprobado:'Aprobado', rechazado:'Rechazado'};
 const tag = s => `<span class="tag ${BADGE[s]||''}">${esc(LABEL[s]||s)}</span>`;
-const finCuota = (price, n=6, ini=S.cfg.inicialMin) => r2(price*(1-ini)*(1+(S.cfg.plans[n]??0))/n);
+// recargo opcional según el número de cuotas (si no está en Configuración, no lleva recargo)
+const rec = n => +(S.cfg.plans[n] ?? 0);
+const finCuota = (price, n=6, ini=S.cfg.inicialMin) => r2(r2(price*(1-ini)*(1+rec(n)))/n);
 const allPlans = () => Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b);
 // inicial y cuotas propias de cada equipo (si el admin no las fijó, se usan las generales)
 const pIni = p => p.ini ?? S.cfg.inicialMin;
 // el admin define en cuántas cuotas se paga cada equipo (una sola opción); si no lo definió, se usa el plan intermedio
 // opciones de cuotas que el admin habilitó para el equipo: [{f:'semanal', n:8}, {f:'quincenal', n:4}]
-const pOpts = p => [['semanal', p.cs], ['quincenal', p.cq]].filter(([,n])=>n && S.cfg.plans[n]!==undefined).map(([f,n])=>({f, n:+n}));
+const pOpts = p => [['semanal', p.cs], ['quincenal', p.cq]].filter(([,n])=>+n>0).map(([f,n])=>({f, n:+n}));
 const pPlan = p => pOpts(p)[0]?.n ?? midPlan();
 const pPlans = p => [pPlan(p)];
 const pShowPlan = p => pPlan(p);
@@ -330,7 +332,9 @@ const cartFin = items => { const ps = items.map(i=>P(i.pid)).filter(Boolean);
   // frecuencias que todos los equipos del carrito permiten, con el mismo número de cuotas
   const opts = ['semanal','quincenal'].map(f=>{ const ns = ps.map(p=>pOpts(p).find(o=>o.f===f)?.n); return ns.length && ns.every(n=>n && n===ns[0]) ? {f, n:ns[0]} : null; }).filter(Boolean);
   return { ini: Math.max(S.cfg.inicialMin, ...ps.map(pIni)), opts, plans: opts.map(o=>o.n), freq: FREQ[opts[0]?.f]||'quincenales' }; };
-const midPlan = () => { const ks = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b); return ks.includes(6) ? 6 : ks[Math.floor(ks.length/2)]; };
+// números de cuotas que usan los equipos a la venta (cada admin los escribe por equipo)
+const usedPlans = () => [...new Set(S.products.filter(p=>p.active!==false && p.fin).flatMap(p=>pOpts(p).map(o=>o.n)))].sort((a,b)=>a-b);
+const midPlan = () => { const ks = usedPlans(); return ks.length ? ks[Math.floor(ks.length/2)] : 8; };
 function historial(uid){
   const ords = S.orders.filter(o=>o.userId===uid && o.st!=='cancelado');
   const cr = S.credits.filter(c=>c.userId===uid);
@@ -427,7 +431,7 @@ function renderChrome(){
 
 /* ===================== vistas: tienda ===================== */
 function storyHTML(){
-  const n = midPlan(), plans = Object.keys(S.cfg.plans).map(Number).sort((a,b)=>a-b), iniPct = Math.round(S.cfg.inicialMin*100);
+  const n = midPlan(), plans = usedPlans(), iniPct = Math.round(S.cfg.inicialMin*100);
   // dos frases por tienda, alternadas: Priority One, Papa's Store, Priority One, Papa's Store
   const fr = [];
   for(let i=0;i<2;i++) S.stores.forEach(t=>{ const f = t.frases[i]; if(f && (f.t||f.p)) fr.push({t, f}); });
@@ -660,7 +664,7 @@ function vProducto(){
       ${p.fin&&pOpts(p).length&&price>=S.cfg.minFin?(()=>{ const down = r2(price*pIni(p));
         return `<div class="finbox"><div class="h">Llévalo financiado</div>
         <table class="t"><tbody><tr><td>Inicial (${Math.round(pIni(p)*100)}%)</td><td class="r num"><b>${usd(down)}</b></td></tr>
-        ${pOpts(p).map((o,i)=>{ const fin = r2(price*(1-pIni(p))*(1+S.cfg.plans[o.n])); return `<tr><td>${i?'o ':''}${o.n} cuotas ${FREQ[o.f]} de</td><td class="r num"><b>${usd(r2(fin/o.n))}</b></td></tr>`; }).join('')}
+        ${pOpts(p).map((o,i)=>{ const fin = r2(price*(1-pIni(p))*(1+rec(o.n))); return `<tr><td>${i?'o ':''}${o.n} cuotas ${FREQ[o.f]} de</td><td class="r num"><b>${usd(r2(fin/o.n))}</b></td></tr>`; }).join('')}
         </tbody></table>${pOpts(p).length>1?'<div class="muted small" style="margin-top:6px">Eliges semanal o quincenal al pagar.</div>':''}
         ${out?'':`<button class="btn buy block" style="margin-top:12px" data-act="buyfin" data-id="${p.id}">Lo quiero en cuotas →</button>`}</div>`; })():p.fin?`<div class="note">Puedes comprarlo en cuotas si tu carrito suma ${usd(S.cfg.minFin)} o más.</div>`:`<div class="note"><b>Solo de contado.</b> ${ST(p.store).cuotas?'Este equipo no está disponible en cuotas.':esc(ST(p.store).name)+' vende sus equipos de contado.'}</div>`}
       ${wa?`<div class="pdp-help">${ico('chat')}<div><b>¿Dudas sobre este equipo?</b><span>Te respondemos por WhatsApp${ST(p.store).horario?', '+esc(ST(p.store).horario.toLowerCase()):''}.</span></div><a class="btn sm" href="${wa}" target="_blank" rel="noopener">Escribir</a></div>`:''}
@@ -739,11 +743,11 @@ function vCheckout(){
   const mets = storeMethods(co.store); if(!mets.includes(co.method)) co.method = mets[0];
   const cur = METODOS[co.method].cur;
   const hoyCur = cur==='Bs' ? bs(bsPrice(k.hoy, co.store)) : usd(k.hoy);
-  const plans = cf.plans.length ? cf.plans : allPlans();
+  const plans = cf.plans.length ? cf.plans : usedPlans();
   const down = r2(k.base*co.ini);
-  const cuotaDe = n => r2(r2((k.base-down)*(1+S.cfg.plans[n]))/n);
+  const cuotaDe = n => r2(r2((k.base-down)*(1+rec(n)))/n);
   const nMax = plans[plans.length-1];
-  const minCuota = canFin ? r2(r2((k.base-r2(k.base*cf.ini))*(1+S.cfg.plans[nMax]))/nMax) : 0;
+  const minCuota = canFin ? r2(r2((k.base-r2(k.base*cf.ini))*(1+rec(nMax)))/nMax) : 0;
   const short = {pago_movil:'Pago móvil', transferencia:'Transferencia', usdt:'USDT', efectivo:'Efectivo'};
   const payTxt = (tS.pay||{})[co.method] || '';
   return `<div class="crumbs"><button data-act="go" data-v="carrito">Carrito</button>›<span>Finalizar compra</span></div>
@@ -801,7 +805,7 @@ function vCheckout(){
     ${cur==='Bs'?`<div class="muted small" style="text-align:right">${hoyCur}</div>`:''}
     ${co.err?`<div class="note bad small">${esc(co.err)}</div>`:''}
     <button class="btn buy block" data-act="placeorder" ${el&&!el.ok?'disabled':''}>${S.busy?'Procesando…':fin?'Solicitar crédito':'Confirmar pedido'}</button>
-    ${fin?`<span class="muted small">Total del crédito: ${usd(k.costoTotal)}${S.cfg.plans[co.n]?` (recargo ${Math.round(S.cfg.plans[co.n]*100)}%)`:' (sin recargo)'}.</span>`:''}
+    ${fin?`<span class="muted small">Total del crédito: ${usd(k.costoTotal)}${rec(co.n)?` (recargo ${Math.round(rec(co.n)*100)}%)`:' (sin recargo)'}.</span>`:''}
   </aside>
   </div>`;
 }
@@ -1332,8 +1336,8 @@ function productModal(id){
         <div class="row" style="flex-wrap:nowrap;align-items:center"><div class="th" id="pf-prev" style="width:64px;height:64px;flex:none">${p?img(p):''}</div>${fileBtn('pf-img', 'image/*', 'data-on="prodimg"', p&&p.img?'Cambiar foto':'Elegir foto')}</div></div>
       ${ST(p?p.store:(myStore()??S.admStore??S.stores[0]?.id)).cuotas?`<label class="ck small"><input type="checkbox" id="pf-fin" ${!p||p.fin?'checked':''}>Se puede pagar en cuotas</label>
       <div class="field"><label for="pf-ini">Inicial mínima de este equipo (%)</label><input id="pf-ini" inputmode="numeric" data-digits="2" value="${p&&p.ini!=null?Math.round(p.ini*100):''}" placeholder="${Math.round(S.cfg.inicialMin*100)} (general)"><span class="hint">Déjalo vacío para usar la inicial general (${Math.round(S.cfg.inicialMin*100)}%).</span></div>
-      ${[['semanal','pf-cs','Cuotas semanales', p?p.cs:(allPlans().includes(8)?8:null)],['quincenal','pf-cq','Cuotas quincenales', p?p.cq:(allPlans().includes(4)?4:midPlan())]].map(([f,id,l,cur])=>`<div class="field"><label for="${id}">${l}</label><select id="${id}"><option value="">No permitir</option>${allPlans().map(n=>`<option value="${n}" ${+cur===n?'selected':''}>${n} cuotas${S.cfg.plans[n]?` (recargo ${r2(S.cfg.plans[n]*100)}%)`:''}</option>`).join('')}</select></div>`).join('')}
-      <p class="hint" style="grid-column:1/-1;margin-top:-6px">Si permites las dos, el cliente elige al pagar. Para tener otros números de cuotas ve a Configuración → Opciones de cuotas.</p>
+      ${[['pf-cs','Cuotas semanales', p?p.cs:8, 52],['pf-cq','Cuotas quincenales', p?p.cq:4, 26]].map(([id,l,cur,mx])=>`<div class="field"><label for="${id}">${l}</label><input id="${id}" inputmode="numeric" data-digits="2" value="${cur??''}" placeholder="Vacío = no permitir"><span class="hint">De 1 a ${mx} cuotas.</span></div>`).join('')}
+      <p class="hint" style="grid-column:1/-1;margin-top:-6px">Escribe en cuántas cuotas se paga este equipo. Si llenas las dos, el cliente elige al pagar; deja vacía la que no quieras ofrecer.</p>
       <div class="note small" id="pf-sim" style="grid-column:1/-1"></div>`:''}
       <label class="ck small"><input type="checkbox" id="pf-act" ${!p||p.active?'checked':''}>Visible en la tienda</label>
       <div class="err" id="pf-err" style="grid-column:1/-1"></div>
@@ -1344,7 +1348,7 @@ function productModal(id){
 function prodSim(){
   const el = $('#pf-sim'); if(!el) return;
   const precio = parseAmt($('#pf-pre').value), iv = $('#pf-ini').value.trim(), ini = iv==='' ? S.cfg.inicialMin : (+iv)/100;
-  const os = [['semanales', $('#pf-cs')?.value], ['quincenales', $('#pf-cq')?.value]].filter(([,v])=>v).map(([f,v])=>({f, n:+v}));
+  const os = [['semanales', $('#pf-cs')?.value], ['quincenales', $('#pf-cq')?.value]].filter(([,v])=>+v>0).map(([f,v])=>({f, n:+v}));
   if(!(precio>0) || !$('#pf-fin').checked || !os.length){ el.hidden = true; return; } el.hidden = false;
   const down = r2(precio*ini);
   el.innerHTML = `<b>El cliente pagará:</b> inicial de ${usd(down)} (${Math.round(ini*100)}%) y ` + os.map(o=>`${o.n} cuotas ${o.f} de ${usd(finCuota(precio, o.n, ini))}`).join(' o ') + '.';
@@ -1373,7 +1377,10 @@ async function saveProduct(){
   const accv = $('#pf-acc').value.trim();
   if(accv && !(parseAmt(accv)>0)){ err.textContent = 'El precio extra de los accesorios debe ser mayor a 0.'; return; }
   const equipo = {condicion:$('#pf-cond').value, gama:$('#pf-gama').value, bateria:bat, garantia_meses:'', accesorios_extra: accv ? String(parseAmt(accv)) : '', accesorios_desc:$('#pf-accd').value.trim()};
-  if($('#pf-cs')){ equipo.cuotas_semanal = $('#pf-cs').value; equipo.cuotas_quincenal = $('#pf-cq').value;
+  if($('#pf-cs')){ const vs = $('#pf-cs').value.trim(), vq = $('#pf-cq').value.trim();
+    if(vs && !(/^\d+$/.test(vs) && +vs>=1 && +vs<=52)){ err.textContent = 'Las cuotas semanales deben ser un número de 1 a 52.'; return; }
+    if(vq && !(/^\d+$/.test(vq) && +vq>=1 && +vq<=26)){ err.textContent = 'Las cuotas quincenales deben ser un número de 1 a 26.'; return; }
+    equipo.cuotas_semanal = vs; equipo.cuotas_quincenal = vq;
     if($('#pf-fin').checked && !equipo.cuotas_semanal && !equipo.cuotas_quincenal){ err.textContent = 'Permite cuotas semanales, quincenales o ambas, o desmarca “Se puede pagar en cuotas”.'; return; } }
   let finIni = null, finPlans = null;
   if($('#pf-ini')){
@@ -1422,10 +1429,10 @@ function aConfig(){
       <div class="field"><label for="c-min">Compra mínima financiable (USD)</label><input id="c-min" inputmode="decimal" value="${c.minFin}"></div>
       <input id="c-cupo" type="hidden" value="${c.cupoBase}">
     </div>
-    <h3>Opciones de cuotas</h3>
-    <p class="muted small" style="margin-top:-8px">Son las opciones que puedes asignar a cada equipo, con su recargo. En Inventario, al editar un equipo, eliges en cuántas cuotas se paga; el cliente no lo elige.</p>
+    <h3>Recargo según el número de cuotas (opcional)</h3>
+    <p class="muted small" style="margin-top:-8px">El número de cuotas de cada equipo lo escribes en Inventario → Editar (el que quieras). Aquí puedes ponerle un recargo a un número de cuotas, por ejemplo 12 cuotas con 10%. Los números que no estén en esta lista no llevan recargo.</p>
     <div id="planes" class="planes">${allPlans().map(n=>planRow(n, r2(c.plans[n]*100))).join('')}</div>
-    <div><button class="btn sm" data-act="planadd">+ Agregar plan</button></div>
+    <div><button class="btn sm" data-act="planadd">+ Agregar recargo</button></div>
     <div class="err" id="c-err"></div>
     <div><button class="btn brand" type="submit">Guardar reglas de financiamiento</button></div></form></section>`:''}`;
 }
@@ -2235,9 +2242,8 @@ document.addEventListener('submit', e=>{
     const n = x => parseAmt($('#'+x).value);
     const planes = {}; let bad = '';
     document.querySelectorAll('#planes .planrow').forEach(r=>{ const nv = r.querySelector('[data-pn]').value.trim(), pv = r.querySelector('[data-pr]').value.trim();
-      if(!nv && !pv) return; const nn = +nv; if(!(Number.isInteger(nn) && nn>=1 && nn<=36)) bad = 'El número de cuotas debe estar entre 1 y 36.';
+      if(!nv && !pv) return; const nn = +nv; if(!(Number.isInteger(nn) && nn>=1 && nn<=52)) bad = 'El número de cuotas debe estar entre 1 y 52.';
       else if(planes[nn]!==undefined) bad = `El plan de ${nn} cuotas está repetido.`; planes[nn] = r2(parseAmt(pv||'0')/100); });
-    if($('#planes') && !bad && !Object.keys(planes).length) bad = 'Deja al menos un plan de cuotas.';
     if(bad){ $('#c-err').textContent = bad; return; }
     const v = {mora:n('c-mora'), inicial_min:r2(n('c-ini')/100), min_financiable:n('c-min'), cupo_base:n('c-cupo')}; if($('#planes')) v.planes = planes;
     if(!(v.mora>=0) || !(v.inicial_min>=0 && v.inicial_min<=0.9) || !(v.min_financiable>=0) || !(v.cupo_base>=0) || Object.values(planes).some(x=>!(x>=0&&x<=1))){
