@@ -768,3 +768,8 @@ footer .cols{grid-template-columns:1.3fr repeat(4,1fr)}
 .legal-who td,.legal-who th{vertical-align:top}
 @media (max-width:900px){.legal{grid-template-columns:minmax(0,1fr)}.legal>*{min-width:0}.legal-toc{position:static}.legal-body{padding:20px 18px}}
 .ck span .link{font-size:inherit}
+
+/* fotos de productos: siempre dentro de su cuadro, en cualquier navegador (Safari incluido) */
+.pc .ph,.pdp .gal,.th{position:relative;overflow:hidden}
+.pc .ph img,.pdp .gal img,.th img{position:absolute;inset:5%;width:90%;height:90%;max-width:none;max-height:none;object-fit:contain}
+.pc .ph .tag{z-index:1}
