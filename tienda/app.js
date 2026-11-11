@@ -28,6 +28,8 @@ const ICO = {
   cart:'<path d="M3 4h2l2.4 11h11l2-8H6.2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/>',
   bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
   truck:'<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff:'<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   card:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>',
@@ -815,7 +817,7 @@ function vLogin(msg){
     <section class="box"><h2>Ingresar</h2>${msg?`<div class="note info small">${esc(msg)}</div>`:''}
       <form id="loginf" class="field" style="gap:14px" novalidate>
         <div class="field"><label for="l-email">Correo electrónico</label><input id="l-email" type="email" autocomplete="username"></div>
-        <div class="field"><label for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="l-pass">Contraseña</label><div class="pwd"><input id="l-pass" type="password" autocomplete="current-password"><button type="button" class="pwd-b" data-act="pwdtoggle" aria-label="Mostrar contraseña" aria-pressed="false">${ico('eye')}</button></div></div>
         <div class="err" id="l-err"></div>
         <button class="btn brand" type="submit">Ingresar</button>
         <button class="link small" type="button" data-act="forgot">¿Olvidaste tu contraseña?</button>
@@ -829,7 +831,7 @@ function vLogin(msg){
 function vNuevaClave(){
   return `<div class="auth" style="grid-template-columns:1fr;max-width:480px"><section class="box"><h2>Nueva contraseña</h2>
     <form id="newpassf" class="field" style="gap:14px" novalidate>
-      <div class="field"><label for="np-pass">Escribe tu nueva contraseña</label><input id="np-pass" type="password" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
+      <div class="field"><label for="np-pass">Escribe tu nueva contraseña</label><div class="pwd"><input id="np-pass" type="password" autocomplete="new-password"><button type="button" class="pwd-b" data-act="pwdtoggle" aria-label="Mostrar contraseña" aria-pressed="false">${ico('eye')}</button></div><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
       <div class="err" id="np-err"></div><button class="btn brand" type="submit">Guardar contraseña</button></form></section></div>`;
 }
 
@@ -1580,7 +1582,7 @@ function vRegistro(){
         <div class="field"><label for="r-ced">Cédula <span class="muted">(solo números)</span></label>${cedField('r', k.tipo, k.ced)}</div>
         <div class="field"><label for="r-tel">Teléfono <span class="muted">(solo números)</span></label><input id="r-tel" data-k="tel" data-digits="11" inputmode="numeric" placeholder="04141234567" value="${esc(k.tel)}" autocomplete="tel"></div>
         <div class="field" style="grid-column:1/-1"><label for="r-email">Correo</label><input id="r-email" type="email" data-k="email" value="${esc(k.email)}" autocomplete="email"></div>
-        <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
+        <div class="field" style="grid-column:1/-1"><label for="r-pass">Contraseña</label><div class="pwd"><input id="r-pass" type="password" data-k="pass" value="${esc(k.pass)}" autocomplete="new-password"><button type="button" class="pwd-b" data-act="pwdtoggle" aria-label="Mostrar contraseña" aria-pressed="false">${ico('eye')}</button></div><span class="hint">Mínimo 8 caracteres, con al menos un número.</span></div>
       </div>
       <div class="priv">${ico('shield')}<p><b>Tus datos quedan privados.</b> Tu cédula y tu teléfono, y si compras en cuotas la foto de tu cédula, tu foto y tu ubicación, se guardan de forma privada y no se divulgan. Solo se usan para verificar tu identidad.</p></div>
       <label class="ck small"><input type="checkbox" data-k="terms" ${k.terms?'checked':''}><span>Soy mayor de 18 años y acepto los <button type="button" class="link" data-act="go" data-v="terminos">Términos de uso</button> y la <button type="button" class="link" data-act="go" data-v="privacidad">Política de privacidad</button>, incluido el tratamiento de mis datos como allí se explica.</span></label>
@@ -2156,6 +2158,9 @@ const ACT = {
   }),
   termsok: () => { S.termsOk = Object.assign(S.termsOk||{}, {[M.store]:true}); closeModal(); render(); },
   termsno: () => { closeModal(); go('carrito'); },
+  // mostrar u ocultar la contraseña que se está escribiendo
+  pwdtoggle: (d, b) => { const i = b.parentElement.querySelector('input'), show = i.type==='password';
+    i.type = show ? 'text' : 'password'; b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña'); b.innerHTML = ico(show ? 'eyeoff' : 'eye'); i.focus(); },
   legal: d => { const go2 = () => { const el = document.getElementById('lg-'+d.s); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); };
     if(S.route.v!==d.v){ go(d.v); setTimeout(go2, 120); } else go2(); },
   legalgo: d => { closeModal(); S.legalAsked = true; go(d.v); },

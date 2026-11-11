@@ -773,3 +773,11 @@ footer .cols{grid-template-columns:1.3fr repeat(4,1fr)}
 .pc .ph,.pdp .gal,.th{position:relative;overflow:hidden}
 .pc .ph img,.pdp .gal img,.th img{position:absolute;inset:5%;width:90%;height:90%;max-width:none;max-height:none;object-fit:contain}
 .pc .ph .tag{z-index:1}
+
+/* ver u ocultar la contraseña */
+.pwd{position:relative;display:block}
+.pwd input{width:100%;padding-right:48px}
+.pwd-b{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:40px;display:grid;place-items:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:8px}
+.pwd-b:hover{color:var(--ink)}
+.pwd-b:focus-visible{outline:2px solid var(--brand-2);outline-offset:1px}
+.pwd-b svg.i{width:20px;height:20px}
