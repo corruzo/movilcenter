@@ -163,7 +163,8 @@ main{padding-block:24px 56px;min-height:60vh}
 .finbox{border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .finbox .h{background:var(--brand);color:var(--gold-l);padding:10px 14px;font-weight:600;font-size:14.5px}
 .spec{width:100%;border-collapse:collapse;font-size:14.5px}
-.spec td{padding:9px 0;border-bottom:1px solid var(--line)}
+.spec td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.spec td+td{padding-left:12px}
 .spec td:first-child{color:var(--muted);width:42%}
 
 /* ---------- tablas ---------- */
@@ -177,6 +178,8 @@ table.t td.nw{white-space:nowrap}
 
 /* ---------- carrito / checkout ---------- */
 .two{display:grid;grid-template-columns:1fr 360px;gap:22px;align-items:start}
+.two.eq{grid-template-columns:repeat(2,minmax(0,1fr))}
+.two>*{min-width:0}
 .box{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;display:grid;gap:16px;min-width:0}
 .box > h2,.box > h3{display:flex;align-items:center;gap:10px}
 .box .stepn{width:26px;height:26px;border-radius:50%;background:var(--brand);color:var(--gold-l);font-size:13px;display:grid;place-items:center;flex:none}
@@ -291,7 +294,7 @@ dl.dl dd{margin:0;font-weight:500}
 @media (max-width:640px){.seg3{grid-template-columns:1fr}.seg4{grid-template-columns:repeat(2,1fr)}.seg3 .so{flex-direction:row;justify-content:space-between;align-items:baseline}}
 
 @media (max-width:960px){
-  .catalog,.two,.panel,.pdp,.auth,.hero{grid-template-columns:1fr}
+  .catalog,.two,.two.eq,.panel,.pdp,.auth,.hero{grid-template-columns:minmax(0,1fr)}
   .sum,.side{position:static}
   .filters{display:none}
   .perks,.kpis{grid-template-columns:1fr 1fr}

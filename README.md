@@ -12,6 +12,7 @@ Tienda en línea de teléfonos con compra de contado o en cuotas, comprobantes d
 tienda/                 Página web (lo que publica Vercel)
   index.html, app.js, estilos.css, config.js, img/
   vercel.json           Cabeceras de seguridad (CSP, HSTS, etc.)
+vercel.json             Para Vercel sin "Root Directory": publica la carpeta tienda/
 supabase/
   instalar_todo.sql     Instalación completa (estructura, seguridad y reglas)
   03_tarea_diaria.sql   Cierre diario con pg_cron (mora, reservas, recordatorios)
