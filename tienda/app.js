@@ -1592,7 +1592,7 @@ function vRegistro(){
 }
 async function doRegister(){
   const k = kycInit(); k.err = '';
-  const fail = m => { k.err = m; render(); };
+  const fail = m => { k.err = m; S.busy = false; render(); };
   const name = k.nombre.trim().replace(/\s+/g,' '), em = k.email.trim().toLowerCase(), ced = onlyDigits(k.ced), tel = normTel(k.tel);
   if(name.split(' ').length<2) return fail('Escribe tu nombre y apellido.');
   if(!['M','F'].includes(k.sexo)) return fail('Indica si eres masculino o femenino.');
@@ -1988,6 +1988,8 @@ function friendly(e){
   const m = e?.message || String(e);
   if(/Failed to fetch|NetworkError|network/i.test(m)) return 'No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.';
   if(/JWT|token/i.test(m)) return 'Tu sesión venció. Vuelve a iniciar sesión.';
+  if(/email rate limit/i.test(m)) return 'En este momento no podemos enviar más correos. Espera unos minutos e inténtalo de nuevo, o escríbenos por WhatsApp.';
+  if(/rate limit|too many/i.test(m)) return 'Hubo demasiados intentos seguidos. Espera unos minutos e inténtalo de nuevo.';
   return m;
 }
 async function rpc(name, args){
