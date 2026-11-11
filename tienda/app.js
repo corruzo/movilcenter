@@ -1022,7 +1022,7 @@ function orderCard(o){
     <div class="ob2">
       ${o.items.map(i=>{const p=P(i.pid)||{name:i.name,colors:[{hex:'#777'}],shape:'phone'}; return `<div class="citem" style="grid-template-columns:56px 1fr;border:0;padding:0"><div class="th" style="height:56px">${img(p,i.ci)}</div><div><b>${esc(i.name)}</b><div class="muted small">${esc(i.color||'')}${i.storage?' · '+esc(i.storage):''} · ${i.qty} × ${usd(i.unit)}</div></div></div>`}).join('')}
       ${track(o)}
-      ${o.tracking&&o.st!=='entregado'?`<div class="small">Envío por ${esc(o.courier||'')} · guía <b>${esc(o.tracking)}</b></div>`:''}
+      ${o.st==='enviado'&&o.courier==='Delivery propio'?`<div class="small">En camino con nuestro delivery${o.tracking?` · lo lleva <b>${esc(o.tracking)}</b>`:''}</div>`:o.tracking&&o.st!=='entregado'?`<div class="small">Envío por ${esc(o.courier||'')} · guía <b>${esc(o.tracking)}</b></div>`:''}
       ${o.st==='pendiente_pago'?`<div class="note warn small">Reservado hasta el ${fdt(o.deadline)}.</div>`:''}
       ${['pendiente_pago','pago_rechazado'].includes(o.st)?`<div class="row">${true?`<button class="btn buy sm" data-act="payorder" data-o="${o.id}">${o.st==='pago_rechazado'?'Subir nuevo comprobante':'Subir comprobante'}</button>`:''}<button class="btn danger sm" data-act="cancelask" data-o="${o.id}">Cancelar pedido</button></div>`:''}
     </div></article>`;
@@ -1290,7 +1290,7 @@ function aPedidos(){
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Entrega</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>
     ${list.map(o=>`<tr><td class="nw">${o.code}${stCol(o.store)}${admCuo()?`<div>${o.mode==='financiado'?'<span class="tag warn">Financiada</span>':'<span class="tag dark">Contado</span>'}</div>`:''}</td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
       <td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}${i.color?` <span class="muted small">(${esc(i.color)})</span>`:''}`).join('<br>')}</td>
-      <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · guía ${esc(o.tracking)}</div>`:''}</td>
+      <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · ${o.courier==='Delivery propio'?'lo lleva':'guía'} ${esc(o.tracking)}</div>`:''}</td>
       <td>${tag(o.status)}${o.st==='pendiente_pago'?`<div class="muted small">Vence ${fdt(o.deadline)}</div>`:''}${o.method==='efectivo'?'<div class="muted small">Paga en efectivo</div>':''}</td><td class="r num nw">${usd(o.total)}</td>
       <td class="nw">${['pendiente_pago','pago_rechazado'].includes(o.st)?`<button class="btn sm" data-act="cajaorder" data-o="${o.id}">Registrar efectivo</button>`:''}${o.st==='preparando'?`<button class="btn brand sm" data-act="ship" data-o="${o.id}">Despachar</button>`:''}
         ${['enviado','listo_retiro'].includes(o.st)?`<button class="btn sm" data-act="deliver" data-o="${o.id}">Marcar entregado</button>`:''}</td></tr>`).join('')}
@@ -1897,7 +1897,8 @@ function shipModal(oid){
   const o = O(oid); const u = U(o.userId) || {}; M = {type:'ship', oid};
   modal(`Despachar ${o.code}`, `<dl class="dl"><dt>Cliente</dt><dd>${esc(u.name)} · ${esc(u.phone)}</dd><dt>Dirección</dt><dd>${esc(o.ship.addr)}, ${esc(o.ship.city)}</dd><dt>Productos</dt><dd>${o.items.map(i=>`${i.qty} × ${esc(i.name)}`).join(', ')}</dd></dl>
     <form id="shipf" class="fg" novalidate><div class="field"><label for="sh-cour">Transporte</label><select id="sh-cour">${o.ship.method==='local'?'<option>Delivery propio</option>':'<option>MRW</option><option>Zoom</option><option>Tealca</option><option>Domesa</option>'}</select></div>
-    <div class="field"><label for="sh-guia">Número de guía</label><input id="sh-guia"></div><div class="err" id="sh-err"></div></form>`,
+    ${o.ship.method==='local'?`<div class="field"><label for="sh-guia">Quién lo lleva <span class="muted">(opcional)</span></label><input id="sh-guia" placeholder="Ej. Carlos · 0414-1234567"><span class="hint">El cliente lo verá en su pedido. Puedes dejarlo vacío.</span></div>`
+      :`<div class="field"><label for="sh-guia">Número de guía</label><input id="sh-guia" placeholder="El que te da la empresa de envíos"></div>`}<div class="err" id="sh-err"></div></form>`,
     `<button class="btn" data-act="close">Cancelar</button><button class="btn brand" data-act="doship">Registrar despacho</button>`);
 }
 function estadoCuenta(uid){
@@ -2133,7 +2134,7 @@ const ACT = {
   cajacuota: d => run(async()=>{ const msg = await rpc('pago_en_caja', {p_cuota:+d.q}); await refresh(); toast(msg); }),
   cajaorder: d => run(async()=>{ const msg = await rpc('pago_en_caja', {p_pedido:+d.o}); await refresh(); toast(msg); }),
   ship: d => shipModal(+d.o),
-  doship: () => run(async()=>{ const g=$('#sh-guia').value.trim(); if(g.length<4){ $('#sh-err').textContent='Ingresa el número de guía.'; return; }
+  doship: () => run(async()=>{ const g=$('#sh-guia').value.trim(), local = $('#sh-cour').value==='Delivery propio'; if(!local && g.length<4){ $('#sh-err').textContent='Escribe el número de guía que te dio la empresa de envíos.'; return; }
     await rpc('despachar_pedido', {pid:M.oid, p_transporte:$('#sh-cour').value, p_guia:g}); closeModal(); await refresh(); toast('Pedido despachado.'); }),
   deliver: d => run(async()=>{ await rpc('entregar_pedido', {pid:+d.o}); await refresh(); toast('Pedido marcado como entregado.'); }),
   stock: d => run(async()=>{ await rpc('ajustar_stock', {pid:+d.id, delta:+d.d}); await refresh(); }),
