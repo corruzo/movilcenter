@@ -174,7 +174,7 @@ function mapCfg(c){
 }
 function mapStore(t){
   const ini = String(t.nombre||'').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).map(w=>/^one$/i.test(w)?'1':w[0]).join('').slice(0,2).toUpperCase();
-  return { id:t.id, slug:t.slug, name:t.nombre, short:ini||'T', logo:t.logo_url||'', color:t.color||'#D2AE3E', slogan:t.eslogan||'',
+  return { id:t.id, slug:t.slug, name:t.nombre, short:ini||'T', logo:viaApi(t.logo_url||''), color:t.color||'#D2AE3E', slogan:t.eslogan||'',
     frases:Array.isArray(t.frases)?t.frases:[], cuotas:t.acepta_cuotas!==false, whatsapp:t.whatsapp||'', correo:t.correo||'', rif:t.rif||'', addr:t.direccion||'', horario:t.horario||'', pay:t.datos_pago||{}, rep:t.representante||'', repCed:t.rep_cedula||'',
     tasa:t.tasa!=null&&+t.tasa>0?+t.tasa:null, recargoBs:+(t.recargo_bs||0), tasaAt:t.tasa_actualizada_en?new Date(t.tasa_actualizada_en):null,
     garCubre:t.garantia_cubre||'60 días por fallas ocultas (bocina, cámaras, pantalla y pin de carga).',
@@ -183,7 +183,7 @@ function mapStore(t){
 function mapProduct(p){
   return { id:p.id, store:p.tienda_id||1, brand:p.marca, name:p.nombre, cat:p.categoria, shape:p.forma, price:+p.precio, stock:p.stock,
     colors:(p.colores && p.colores.length ? p.colores : [{n:'Único', hex:'#777'}]), storages:(p.capacidades && p.capacidades.length ? p.capacidades : null),
-    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:p.imagen_url||'', active:p.activo, fin:p.financiable!==false,
+    specs:p.specs||{}, desc:p.descripcion||'', wall:p.pantalla, img:viaApi(p.imagen_url||''), active:p.activo, fin:p.financiable!==false,
     ini:p.inicial_min!=null?+p.inicial_min:null, plans:Array.isArray(p.planes)&&p.planes.length?p.planes.map(Number):null,
     cond:p.condicion||'nuevo', bat:p.bateria??null, gar:p.garantia_meses??null, cs:p.cuotas_semanal??null, cq:p.cuotas_quincenal??null,
     gama:p.gama||(+p.precio<200?'baja':+p.precio<500?'media':'alta'), acc:p.accesorios_extra!=null?+p.accesorios_extra:null, accDesc:p.accesorios_desc||'' };
@@ -820,7 +820,7 @@ function vCheckout(){
         ${cur==='Bs'?`<div class="field"><label for="co-bank">Banco de origen</label><select id="co-bank" data-in="bank">${BANKS.map(b=>`<option ${co.bank===b?'selected':''}>${b}</option>`).join('')}</select></div>`:''}
         <div class="field"><label for="co-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="co-ref" data-in="ref" value="${esc(co.ref)}" placeholder="${cur==='Bs'?'Ej. 00418833':'ID de la orden en Binance'}"></div>
         <div class="field"><label for="co-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="co-amt" data-in="amount" inputmode="decimal" value="${esc(co.amount)}" placeholder="${cur==='Bs'?bsPrice(k.hoy, co.store):k.hoy}"></div>
-        <div class="field"><span class="lbl">Comprobante</span>${fileBtn('co-file', 'image/*,application/pdf', 'data-on="file"', 'Subir captura del pago', co.file)}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
+        <div class="field"><span class="lbl">Comprobante</span>${fileBtn('co-file', 'image/*,application/pdf', 'data-on="file"', 'Subir captura del pago', co.file)}<span class="hint">Captura o PDF del pago (PDF de máximo 4 MB).</span></div>
       </div>`:''}
     </section>
   </div>
@@ -1387,7 +1387,7 @@ async function uploadPublic(blob, folder){
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.jpg`;
   const {error} = await sb.storage.from('productos').upload(path, blob, {contentType:'image/jpeg', upsert:false});
   if(error) throw new Error('No se pudo subir la imagen: ' + error.message);
-  return sb.storage.from('productos').getPublicUrl(path).data.publicUrl;
+  return toCanon(sb.storage.from('productos').getPublicUrl(path).data.publicUrl);
 }
 async function saveProduct(){
   const err = $('#pf-err'); err.textContent = '';
@@ -1397,7 +1397,7 @@ async function saveProduct(){
   const colores = $('#pf-col').value.split(',').map(x=>x.trim()).filter(Boolean).map(n=>({n, hex: COLORES[n.toLowerCase().split(' ')[0]] || '#777777'}));
   const capacidades = $('#pf-cap').value.split(',').map(x=>x.trim()).filter(Boolean).map(x=>{ const m = x.match(/^(.*?)\s*\+\s*([\d.,]+)$/); return m ? {n:m[1].trim(), d:parseAmt(m[2])} : {n:x, d:0}; });
   const specs = {}; $('#pf-spe').value.split('\n').forEach(l=>{ const i = l.indexOf(':'); if(i>0){ const k = l.slice(0,i).trim(), v = l.slice(i+1).trim(); if(k && v) specs[k] = v; } });
-  let imagen = M.img;
+  let imagen = toCanon(M.img);
   if(M.file) imagen = await uploadPublic(await compressImg(M.file, 1200), 'p');
   const body = {id:M.id, tienda_id: $('#pf-st') ? +$('#pf-st').value : null, nombre, marca:$('#pf-mar').value.trim(), categoria:$('#pf-cat').value, precio,
     stock: $('#pf-stk') ? +($('#pf-stk').value||0) : undefined, colores: colores.length ? colores : [{n:'Único', hex:'#777777'}], capacidades, specs,
@@ -1893,7 +1893,7 @@ function payModal(ctx){
       ${cur==='Bs'?`<div class="field"><label for="pm-bank">Banco de origen</label><select id="pm-bank">${BANKS.map(b=>`<option>${b}</option>`).join('')}</select></div>`:''}
       <div class="field"><label for="pm-ref">${cur==='Bs'?'Referencia':'ID de la orden (Binance)'}</label><input id="pm-ref"></div>
       <div class="field"><label for="pm-amt">Monto pagado (${cur==='USD'?'USDT':cur})</label><input id="pm-amt" inputmode="decimal" value="${cur==='Bs'?bsPrice(M.amount, M.store):M.amount}"></div>
-      <div class="field"><span class="lbl">Comprobante</span>${fileBtn('pm-file', 'image/*,application/pdf', '', 'Subir captura del pago')}<span class="hint">Captura o PDF del pago. Máximo 5 MB.</span></div>
+      <div class="field"><span class="lbl">Comprobante</span>${fileBtn('pm-file', 'image/*,application/pdf', '', 'Subir captura del pago')}<span class="hint">Captura o PDF del pago (PDF de máximo 4 MB).</span></div>
       <div class="err" id="pm-err" style="grid-column:1/-1"></div>
     </form>`, `<button class="btn" data-act="close">Cancelar</button><button class="btn buy" data-act="submitpay">Enviar comprobante</button>`);
 }
@@ -2032,8 +2032,11 @@ async function rpc(name, args){
 }
 async function uploadProof(file){
   if(!file) throw new Error('Adjunta la imagen o PDF del comprobante.');
-  if(file.size > 5*1024*1024) throw new Error('El comprobante supera 5 MB.');
+  if(file.size > 20*1024*1024) throw new Error('El archivo es demasiado grande.');
   if(!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(file.type)) throw new Error('El comprobante debe ser JPG, PNG, WEBP o PDF.');
+  // capturas grandes se reducen: suben más rápido y caben por la ruta propia
+  if(file.type!=='application/pdf' && file.size > 1.5*1024*1024){ try{ const c = await compressImg(file, 1600); file = new File([c], 'comprobante.jpg', {type:'image/jpeg'}); }catch(e){} }
+  if(file.size > 4*1024*1024) throw new Error('El comprobante supera 4 MB. Envía una captura o un PDF más liviano.');
   const ext = file.type==='application/pdf' ? 'pdf' : file.type.split('/')[1].replace('jpeg','jpg');
   const path = `${S.session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
   const {error} = await sb.storage.from('comprobantes').upload(path, file, {contentType:file.type, upsert:false});
@@ -2304,7 +2307,7 @@ document.addEventListener('submit', e=>{
     const wa = onlyDigits($('#tf-wa').value); if(wa && !/^58\d{10}$/.test(wa)){ err.textContent = 'El WhatsApp debe empezar por 58 y tener 12 números, ej. 584141234567.'; return; }
     const datos = {}; f.querySelectorAll('[data-dp]').forEach(i=>datos[i.dataset.dp] = i.value.trim());
     const frases = [0,1].map(i=>({k:nom, t:$('#tf-ft'+i).value.trim(), p:$('#tf-fp'+i).value.trim()})).filter(x=>x.t||x.p);
-    let logo = t.logo; if(S.logoFile){ logo = await uploadPublic(await compressImg(S.logoFile, 600), 'logos'); }
+    let logo = toCanon(t.logo); if(S.logoFile){ logo = await uploadPublic(await compressImg(S.logoFile, 600), 'logos'); }
     await rpc('actualizar_tienda', {p:{id:sid, nombre:nom, eslogan:$('#tf-esl').value.trim(), frases, logo_url:logo, whatsapp:wa, correo:$('#tf-cor').value.trim(), rif:$('#tf-rif').value.trim(), representante:$('#tf-rep').value.trim(), rep_cedula:$('#tf-repc').value.trim(), garantia_cubre:$('#tf-gc').value.trim(), garantia_excluye:$('#tf-ge').value.trim(), direccion:'', horario:$('#tf-hor').value.trim(), datos_pago:datos}});
     S.logoFile = null; await refresh(); toast('Datos de la tienda guardados.');
   });
@@ -2312,18 +2315,45 @@ document.addEventListener('submit', e=>{
 window.addEventListener('hashchange', route);
 
 /* ===================== inicio ===================== */
+// ---------- conexión con Supabase ----------
+let API = '';
+const loadScript = src => new Promise((ok, ko)=>{ const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+// cada consulta tiene un límite de espera: una red que no responde no deja la página cargando para siempre
+const fetchT = (u, o={}) => { const c = new AbortController(), t = setTimeout(()=>c.abort(), 20000);
+  if(o.signal) o.signal.addEventListener('abort', ()=>c.abort());
+  return fetch(u, {...o, signal:c.signal}).catch(e=>{ throw e?.name==='AbortError' ? new TypeError('Failed to fetch (tiempo de espera)') : e; }).finally(()=>clearTimeout(t)); };
+async function pickApi(url, key){
+  const tries = [];
+  if(T.proxy && /^https?:$/.test(location.protocol)) tries.push(location.origin + T.proxy);
+  tries.push(url);
+  for(const base of tries){
+    try{ const c = new AbortController(), t = setTimeout(()=>c.abort(), 6000);
+      const r = await fetch(base + '/auth/v1/health', {headers:{apikey:key}, signal:c.signal}); clearTimeout(t);
+      if(r.ok) return base; }catch(e){}
+  }
+  return tries[0];
+}
+// las fotos guardadas con la dirección de Supabase se muestran por la misma ruta que funciona
+const viaApi = u => u && API && T.supabaseUrl && API !== T.supabaseUrl ? u.split(T.supabaseUrl).join(API) : u;
+const toCanon = u => u && API && T.supabaseUrl && API !== T.supabaseUrl ? u.split(API).join(T.supabaseUrl) : u;
 async function init(){
+  document.querySelectorAll('link[data-fonts]').forEach(l=>l.media='all');
   const url = T.supabaseUrl || '', key = T.supabaseAnonKey || '';
   if(!/^https:\/\/.+/.test(url) || !key || /PEGA_AQUI/.test(url + key)){
     $('#app').innerHTML = `<div class="setup"><h2>Falta conectar la tienda</h2><p>Abre el archivo <code>config.js</code> y pega la <b>Project URL</b> y la <b>anon key</b> de tu proyecto de Supabase. Luego vuelve a subir los archivos.</p></div>`;
     return;
   }
+  // la librería de Supabase llega por la ruta propia /lib; si no está (otro hosting), se pide al CDN
+  if(!window.supabase?.createClient) await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js').catch(()=>{});
   if(!window.supabase?.createClient){ $('#app').innerHTML = `<div class="setup"><h2>No se pudo cargar la tienda</h2><p>Revisa tu conexión a internet y recarga la página.</p></div>`; return; }
   // Enlaces de Supabase (confirmación de correo, recuperar contraseña) llegan en el hash
   const h0 = location.hash;
   const recovering = /type=recovery/.test(h0);
   const authErr = /error_description=([^&]+)/.exec(h0);
-  sb = window.supabase.createClient(url, key);
+  // conexión: primero por la ruta propia (prioritynstore.com/sb), que funciona aunque la red bloquee supabase.co
+  API = await pickApi(url, key);
+  const ref = (url.match(/^https:\/\/([^.]+)\./)||[])[1] || 'tienda';
+  sb = window.supabase.createClient(API, key, {auth:{storageKey:`sb-${ref}-auth-token`}, global:{fetch:fetchT}});
   try{
     const {data} = await sb.auth.getSession();
     S.session = data.session || null;
@@ -2346,7 +2376,7 @@ async function init(){
     } else if(!S.ready){
       $('#app').innerHTML = `<div class="setup"><h2>${netErr(e)?'No pudimos conectarnos':'No se pudo cargar la tienda'}</h2><p>${netErr(e)?'Tu conexión a internet está fallando o es muy lenta en este momento.':esc(friendly(e))}</p>
         <p><button class="btn buy" id="retry">Intentar de nuevo</button></p>
-        <p class="muted small">${netErr(e)?'Si usas una VPN o un bloqueador de anuncios, desactívalo y vuelve a intentar. También puedes probar con datos móviles o con otra red WiFi.':'Si el problema sigue, escríbenos por WhatsApp.'}</p></div>`;
+        <p class="muted small">${netErr(e)?'Prueba con datos móviles o con otra red WiFi. Si usas un bloqueador de anuncios, desactívalo para esta página.':'Si el problema sigue, escríbenos por WhatsApp.'}</p></div>`;
       $('#retry')?.addEventListener('click', ()=>location.reload());
       return;
     }

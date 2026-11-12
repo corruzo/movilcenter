@@ -57,5 +57,15 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/sb/:path*",
+      "destination": "https://ylkgjujchkdvtnhbqqmb.supabase.co/:path*"
+    },
+    {
+      "source": "/lib/supabase.js",
+      "destination": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+    }
   ]
 }

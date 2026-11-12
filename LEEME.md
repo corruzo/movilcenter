@@ -58,6 +58,7 @@ Así los clientes entran apenas se registran. El correo gratuito de Supabase sol
    - **Publishable key**, que empieza con `sb_publishable_`. En proyectos antiguos se llama **anon public**.
 2. Abre `tienda/config.js` con el Bloc de notas y pega cada dato en `supabaseUrl` y `supabaseAnonKey`. Guarda.
 3. El nombre, el logo, el WhatsApp, el RIF y los datos de pago de cada tienda **no** van aquí: se cambian desde el panel (Paso 8).
+4. Abre `vercel.json` (el de la raíz y el de `tienda/`) y, en `rewrites`, cambia la dirección `https://ylkgjujchkdvtnhbqqmb.supabase.co` por tu Project URL. Esa ruta propia (`tudominio.com/sb`) hace que la tienda cargue aunque la red del cliente bloquee supabase.co.
 
 > ⚠️ Nunca pegues en `config.js` la **Secret key**, la **service_role** ni la contraseña de la base de datos. La Publishable key sí puede ser pública: la seguridad la ponen las reglas de la base de datos.
 
@@ -171,6 +172,7 @@ Para cambiar algo después pulsa **Editar**. Para ocultar un producto sin borrar
 | "Cada tienda se paga por separado" | El cliente intentó pagar productos de las dos tiendas juntos. Debe pagar desde el carrito cada tienda aparte. |
 | No llegan correos | Revisa el Paso 3. El correo gratuito de Supabase tiene un límite bajo por hora. |
 | “Para comprar en cuotas primero verifica tu identidad” | El cliente debe entrar a **Mi cuenta → Verificación** y enviar sus documentos. |
+| La página se queda cargando y con VPN sí abre | La red del cliente bloquea supabase.co. La tienda ya entra por su propio dominio (`/sb`); revisa que la dirección de `rewrites` en `vercel.json` sea la de tu proyecto. |
 | No se aplican las moras | Revisa que activaste **pg_cron** y ejecutaste `03_tarea_diaria.sql`. |
 | El cliente no ve pago móvil ni transferencia | Esa tienda no ha publicado su tasa o no tiene cargados esos datos de pago (Panel → Configuración). |
 
@@ -180,4 +182,4 @@ La página incluye **Términos de uso** (`#terminos`) y **Política de privacida
 
 ## Si cambias de proyecto de Supabase
 
-Cambia la URL y la Publishable key en `tienda/config.js`. La política de seguridad de `tienda/vercel.json` ya permite cualquier proyecto `*.supabase.co`.
+Cambia la URL y la Publishable key en `tienda/config.js`, y la dirección de `rewrites` en los dos `vercel.json` (raíz y `tienda/`). La política de seguridad ya permite cualquier proyecto `*.supabase.co`.
