@@ -781,3 +781,12 @@ footer .cols{grid-template-columns:1.3fr repeat(4,1fr)}
 .pwd-b:hover{color:var(--ink)}
 .pwd-b:focus-visible{outline:2px solid var(--brand-2);outline-offset:1px}
 .pwd-b svg.i{width:20px;height:20px}
+
+/* retiro personal: se acuerda por WhatsApp */
+.retiro{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid #bfe3cb;background:#effaf3;border-radius:var(--r);margin-top:12px}
+.retiro>svg.i{flex:none;width:24px;height:24px;color:#1FA855;margin-top:2px}
+.retiro b{display:block;font-size:15px;color:var(--ink)}
+.retiro p{margin:4px 0 10px;font-size:14px;color:var(--ink-2,var(--ink))}
+.btn.wa{background:#1FA855;color:#fff;border-color:#1FA855;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.btn.wa:hover{background:#178a45;border-color:#178a45;color:#fff}
+.btn.wa svg.i{width:18px;height:18px}

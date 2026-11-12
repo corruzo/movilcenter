@@ -14,7 +14,7 @@ Costo: solo el dominio (Vercel y Supabase tienen plan gratis para empezar).
 | `supabase/instalar_todo.sql` | **Instalación completa**: tablas, funciones, seguridad (RLS) y reglas de negocio. Se puede ejecutar más de una vez. |
 | `supabase/03_tarea_diaria.sql` | Programa el cierre diario: mora de $4, reservas vencidas y recordatorios. |
 | `supabase/04_crear_admin.sql` | Convierte una cuenta registrada en administrador de una tienda. |
-| `supabase/historial/` | Las actualizaciones 01 a 26 por separado, en el orden en que se crearon. Solo como referencia: `instalar_todo.sql` ya las incluye. |
+| `supabase/historial/` | Las actualizaciones 01 a 27 por separado, en el orden en que se crearon. Solo como referencia: `instalar_todo.sql` ya las incluye. |
 
 Los datos de cada tienda (RIF, cuentas bancarias, cédulas, WhatsApp) **no** están en este repositorio: se cargan en la base de datos con el archivo SQL que se entrega aparte, o desde el panel.
 

@@ -365,6 +365,10 @@ const concept = p => { const o=O(p.orderId), c=C(p.creditId);
 // botón para subir archivos, siempre en español (el del navegador cambia según su idioma)
 const fileBtn = (id, accept, attrs, txt, file) => `<label class="filebtn" for="${id}"><input id="${id}" type="file" accept="${accept}" ${attrs}><span class="fb">${ico('upload')} ${txt}</span><span class="fn ${file?'ok':''}">${file?'✓ '+esc(file.name):'Ningún archivo elegido'}</span></label>`;
 const amtTxt = p => p.currency==='Bs' ? `${bs(p.reported)} <span class="muted small">(${usd(reportedUSD(p))})</span>` : usd(p.reported);
+// opciones de entrega en un orden fijo: delivery, envío nacional y retiro personal
+const shipKeys = () => ['local','nacional','retiro'].filter(k=>S.cfg.envio[k]).concat(Object.keys(S.cfg.envio).filter(k=>!['local','nacional','retiro'].includes(k)));
+// mensaje de WhatsApp para acordar un retiro
+const retiroWa = (store, o) => waLink(o ? `Hola, hice el pedido ${o.code} (${o.items.map(i=>`${i.qty} × ${i.name}`).join(', ')}) para retiro personal. ¿Dónde y cuándo puedo retirarlo?` : 'Hola, quiero comprar un equipo y retirarlo personalmente. ¿Dónde y cuándo puedo retirarlo?', store);
 const waLink = (txt, store) => { const n = store ? ST(store).whatsapp : (S.stores.find(t=>t.whatsapp)||{}).whatsapp; return n ? `https://wa.me/${encodeURIComponent(n)}?text=${encodeURIComponent(txt)}` : ''; };
 // logo de una tienda: la imagen subida o un monograma con sus iniciales
 const storeMark = (t, size=30) => t.logo ? `<img class="smark" src="${esc(t.logo)}" alt="${esc(t.name)}" style="height:${size}px">` : `<span class="smark mono" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.4)}px">${esc(t.short)}</span>`;
@@ -390,8 +394,8 @@ function pcard(p){
 function track(o){
   if(o.st==='cancelado') return `<div class="note">Pedido cancelado${o.cancelReason?': '+esc(o.cancelReason):''}.</div>`;
   const fin = o.mode==='financiado', ret = o.ship.method==='retiro';
-  const st = [fin?'Solicitud recibida':'Pedido recibido', fin?'Crédito aprobado':'Pago verificado', ret?'Listo para retiro':'Preparando', ...(ret?[]:['Enviado']), 'Entregado'];
-  const map = {pendiente_pago:1, pago_en_revision:1, credito_en_evaluacion:1, pago_rechazado:1, preparando:2, listo_retiro:2, enviado:3, entregado:st.length};
+  const st = [fin?'Solicitud recibida':'Pedido recibido', fin?'Crédito aprobado':'Pago verificado', 'Preparando', ret?'Listo para retirar':'Enviado', 'Entregado'];
+  const map = {pendiente_pago:1, pago_en_revision:1, credito_en_evaluacion:1, pago_rechazado:1, preparando:2, listo_retiro:3, enviado:3, entregado:st.length};
   const cur = map[o.st] ?? 1;
   return `<div class="track">${st.map((s,i)=>{
     const cls = i<cur ? 'done' : i===cur ? (o.st==='pago_rechazado'?'bad':'cur') : '';
@@ -752,7 +756,7 @@ function vCheckout(){
   cf.freq = FREQ[co.freq];
   if(!canFin) co.mode='contado';
   co.when = (co.later || co.method==='efectivo') ? 'despues' : 'ahora';
-  if(!S.cfg.envio[co.ship]) co.ship = Object.keys(S.cfg.envio)[0];
+  if(!S.cfg.envio[co.ship]) co.ship = shipKeys()[0];
   const fin = co.mode==='financiado';
   const needV = fin && ['incompleto','rechazado'].includes(u.verif);
   const el = fin ? eligibility(k.financed, co.store) : null;
@@ -773,9 +777,11 @@ function vCheckout(){
   <div class="two">
   <div class="costeps">
     <section class="box"><h2><span class="stepn">1</span>Entrega</h2>
-      <div class="seg seg${Math.min(3,Object.keys(S.cfg.envio).length)}">${Object.entries(S.cfg.envio).map(([key,e])=>{const c=shipPrice(key,k.base);return `
+      <div class="seg seg${Math.min(3,shipKeys().length)}">${shipKeys().map(key=>{const e=S.cfg.envio[key], c=shipPrice(key,k.base);return `
         <label class="so"><input type="radio" name="ship" value="${key}" data-on="ship" ${co.ship===key?'checked':''}><span class="ot">${esc(e.n)}</span><span class="os">${c?usd(c):'Gratis'}</span></label>`}).join('')}</div>
-      ${`<div class="fg"><div class="field" style="grid-column:1/-1"><label for="co-addr">Dirección</label><input id="co-addr" data-in="addr" value="${esc(co.addr)}" placeholder="Calle, edificio, piso, punto de referencia" autocomplete="street-address"></div>
+      ${co.ship==='retiro'?`<div class="retiro">${ico('chat')}<div><b>Retiro personal, sin costo de envío</b><p>${esc(tS.name)} no tiene un local fijo: el punto de retiro se acuerda contigo por WhatsApp. Confirma tu pedido y escríbenos para decirte dónde y cuándo retirarlo.</p>
+          ${tS.whatsapp?`<a class="btn wa sm" href="${retiroWa(co.store)}" target="_blank" rel="noopener">${ico('chat')} Escribir a ${esc(tS.name)} por WhatsApp</a>`:''}</div></div>`
+      :`<div class="fg"><div class="field" style="grid-column:1/-1"><label for="co-addr">Dirección</label><input id="co-addr" data-in="addr" value="${esc(co.addr)}" placeholder="Calle, edificio, piso, punto de referencia" autocomplete="street-address"></div>
         <div class="field"><label for="co-city">Ciudad</label><input id="co-city" data-in="city" value="${esc(co.city)}" autocomplete="address-level2"></div>
         <div class="field"><label>Recibe</label><input value="${esc(u.name)}" disabled></div></div>
         <p class="muted small">${esc(S.cfg.envio[co.ship]?.d||'')}</p>`}
@@ -904,7 +910,7 @@ function vTerminos(){
     ['productos','Productos y condición', `<p>Vendemos teléfonos y sus accesorios. Cada ficha indica la condición del equipo:</p><ul><li><b>Nuevo:</b> sin uso, en su empaque.</li><li><b>Clase A:</b> usado, en excelente estado, sin marcas visibles.</li><li><b>Clase B:</b> usado, con detalles estéticos leves que no afectan su funcionamiento.</li><li><b>Clase C:</b> usado, con marcas de uso visibles; funciona correctamente.</li></ul><p>En los equipos usados se indica, cuando se conoce, el estado de la batería. Las fotos pueden ser referenciales. La existencia es limitada y se confirma al verificar el pago.</p>`],
     ['precios','Precios, moneda y tasa', `<ul><li>Los precios se publican en <b>dólares de los Estados Unidos (USD)</b> como moneda de referencia.</li><li>Si pagas en <b>bolívares</b> (pago móvil o transferencia), el monto se calcula con la tasa que publica el comercio vendedor el día del pago y puede incluir un <b>ajuste por pago en bolívares</b>. Por eso <b>el monto en bolívares y el monto en dólares son distintos</b>. Antes de pagar ves los dos montos.</li><li>El monto que se te muestra al momento de pagar es el que debes pagar. Si pagas otro día, el monto en bolívares puede cambiar porque la tasa cambia.</li><li>Si pagas en <b>USDT</b> o en <b>efectivo</b>, pagas el monto en dólares.</li><li>Cada pago queda registrado con la tasa que se usó.</li><li>Los precios y promociones pueden cambiar sin aviso, pero no afectan los pedidos ya pagados ni los créditos ya aprobados.</li></ul>`],
     ['pedidos','Pedidos, reserva y pago', `<ul><li>Al confirmar un pedido, los productos quedan reservados por <b>${S.cfg.reservaHoras} horas</b>. Si en ese tiempo no se recibe el pago, el pedido se cancela solo.</li><li>Los pagos con comprobante (pago móvil, transferencia o USDT) los verifica el comercio antes de despachar. Si el comprobante no coincide con el dinero recibido, el pago se rechaza y te avisamos.</li><li>El pago en efectivo se coordina por WhatsApp y el comercio lo registra cuando lo recibe.</li><li>Enviar comprobantes falsos o alterados es motivo de cierre de la cuenta y puede ser denunciado ante las autoridades.</li><li>Puedes cancelar tu pedido desde tu cuenta mientras esté pendiente de pago. Si ya pagaste y quieres cancelar antes del despacho, escríbele por WhatsApp al comercio: si se cancela, te devuelve el dinero por el mismo medio y en la moneda en que pagaste.</li></ul>`],
-    ['envios','Envíos y entrega', `<ul><li>Hacemos entregas por delivery en la ciudad y envíos nacionales por encomienda. El costo y el tiempo estimado se muestran antes de pagar.</li><li>Al recibir, <b>revisa el equipo con quien te lo entrega</b>: pantalla, cornetas, cámaras, Face ID o huella, pin de carga, botones y liberación. Cualquier falla visible debe reportarse en ese momento.</li><li>En envíos nacionales, el equipo viaja a nombre de la persona registrada en el pedido. Revisa el paquete al retirarlo de la empresa de encomiendas.</li></ul>`],
+    ['envios','Envíos y entrega', `<ul><li>Hacemos entregas por delivery en la ciudad y envíos nacionales por encomienda. El costo y el tiempo estimado se muestran antes de pagar.</li><li>También puedes elegir <b>retiro personal</b>, sin costo de envío. Como no tenemos un local fijo, el punto y la hora de retiro se acuerdan contigo por WhatsApp.</li><li>Al recibir, <b>revisa el equipo con quien te lo entrega</b>: pantalla, cornetas, cámaras, Face ID o huella, pin de carga, botones y liberación. Cualquier falla visible debe reportarse en ese momento.</li><li>En envíos nacionales, el equipo viaja a nombre de la persona registrada en el pedido. Revisa el paquete al retirarlo de la empresa de encomiendas.</li></ul>`],
     ['garantia','Garantía', `<p><b>Cubre:</b> ${esc(g.garCubre||'')}</p><p><b>No cubre:</b> ${esc(g.garExcluye||'')}</p><p>Para usarla, escríbele por WhatsApp al comercio que te vendió el equipo con el código de tu pedido y una descripción de la falla. El comercio revisa el equipo y, según el diagnóstico, lo repara o lo cambia por uno de igual condición. La garantía corre desde la fecha de entrega.</p>`],
     ['devoluciones','Cambios y devoluciones', `<p>Si el equipo llega con una falla que se detecta en la revisión al entregar, o presenta una falla cubierta por la garantía, tienes derecho a la reparación o al cambio según lo indicado arriba. No se aceptan cambios por equipos dañados por el uso, golpes, humedad o manipulación de terceros. Esto no limita los derechos que te reconoce la legislación venezolana de protección a las personas en el acceso a bienes y servicios.</p>`],
     ...(fin.length?[['cuotas','Compras en cuotas', `<p>Solo ${fin.map(t=>esc(t.name)).join(' y ')} vende en cuotas, y solo en los equipos marcados “Contado o cuotas”.</p><ul><li><b>Verificación:</b> para pedir un crédito verificamos tu identidad una sola vez (foto tuya, foto de tu cédula, dirección y ubicación). La aprobación la decide una persona del comercio y puede negarse.</li><li><b>Inicial y cuotas:</b> pagas una inicial y el resto en cuotas semanales o quincenales, según lo que permita cada equipo. Antes de confirmar ves el número de cuotas, el monto de cada una y sus fechas.</li><li><b>Mora:</b> si pagas una cuota después de su fecha, se suma un cargo fijo de <b>${mora}</b> a esa cuota.</li><li><b>Reserva de dominio:</b> el equipo sigue siendo propiedad del comercio hasta que pagues todas las cuotas.</li><li><b>Falta de pago:</b> si acumulas más de 3 cuotas vencidas sin pagar, el comercio puede dar por terminado el crédito y recuperar el equipo.</li><li><b>Contrato:</b> al recibir el equipo firmas un contrato de compraventa a crédito con el IMEI del equipo y el cronograma de pagos.</li><li><b>Pago adelantado:</b> puedes adelantar cuotas o liquidar el crédito cuando quieras.</li><li><b>Recordatorios:</b> te podemos escribir por WhatsApp antes y después de cada vencimiento.</li></ul>`]]:[]),
@@ -1040,6 +1046,7 @@ function orderCard(o){
       ${o.items.map(i=>{const p=P(i.pid)||{name:i.name,colors:[{hex:'#777'}],shape:'phone'}; return `<div class="citem" style="grid-template-columns:56px 1fr;border:0;padding:0"><div class="th" style="height:56px">${img(p,i.ci)}</div><div><b>${esc(i.name)}</b><div class="muted small">${esc(i.color||'')}${i.storage?' · '+esc(i.storage):''} · ${i.qty} × ${usd(i.unit)}</div></div></div>`}).join('')}
       ${track(o)}
       ${o.st==='enviado'&&o.courier==='Delivery propio'?`<div class="small">En camino con nuestro delivery${o.tracking?` · lo lleva <b>${esc(o.tracking)}</b>`:''}</div>`:o.tracking&&o.st!=='entregado'?`<div class="small">Envío por ${esc(o.courier||'')} · guía <b>${esc(o.tracking)}</b></div>`:''}
+      ${o.ship.method==='retiro' && !['entregado','cancelado'].includes(o.st)?`<div class="retiro">${ico('chat')}<div><b>${o.st==='listo_retiro'?'Tu pedido está listo para retirar':'Retiro personal'}</b><p>${o.st==='listo_retiro'?'Escríbenos por WhatsApp para acordar dónde y cuándo lo retiras.':'Acordamos por WhatsApp dónde y cuándo lo retiras. Puedes escribirnos desde ya.'}</p>${ST(o.store).whatsapp?`<a class="btn wa sm" href="${retiroWa(o.store, o)}" target="_blank" rel="noopener">${ico('chat')} Acordar el retiro por WhatsApp</a>`:''}</div></div>`:''}
       ${o.st==='pendiente_pago'?`<div class="note warn small">Reservado hasta el ${fdt(o.deadline)}.</div>`:''}
       ${['pendiente_pago','pago_rechazado'].includes(o.st)?`<div class="row">${true?`<button class="btn buy sm" data-act="payorder" data-o="${o.id}">${o.st==='pago_rechazado'?'Subir nuevo comprobante':'Subir comprobante'}</button>`:''}<button class="btn danger sm" data-act="cancelask" data-o="${o.id}">Cancelar pedido</button></div>`:''}
     </div></article>`;
@@ -1307,9 +1314,9 @@ function aPedidos(){
     ${list.length?`<div class="tbl"><table class="t"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Entrega</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>
     ${list.map(o=>`<tr><td class="nw">${o.code}${stCol(o.store)}${admCuo()?`<div>${o.mode==='financiado'?'<span class="tag warn">Financiada</span>':'<span class="tag dark">Contado</span>'}</div>`:''}</td><td class="nw">${fd(o.created)}</td><td>${esc(U(o.userId)?.name||'')}<div class="muted small">${esc(U(o.userId)?.phone||'')}</div></td>
       <td>${o.items.map(i=>`${i.qty} × ${esc(i.name)}${i.storage?' '+esc(i.storage):''}${i.color?` <span class="muted small">(${esc(i.color)})</span>`:''}`).join('<br>')}</td>
-      <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · ${o.courier==='Delivery propio'?'lo lleva':'guía'} ${esc(o.tracking)}</div>`:''}</td>
+      <td>${esc(S.cfg.envio[o.ship.method]?.n||o.ship.method)}${o.ship.method==='retiro'&&U(o.userId)?.phone?`<div><a class="link small" href="https://wa.me/${waNum(U(o.userId).phone)}?text=${encodeURIComponent(`Hola ${(U(o.userId).name||'').split(' ')[0]}, te escribimos de ${ST(o.store).name} por tu pedido ${o.code} para acordar el retiro.`)}" target="_blank" rel="noopener">Escribir al cliente por WhatsApp</a></div>`:''}${o.ship.city?`<div class="muted small">${esc(o.ship.addr)}, ${esc(o.ship.city)}</div>`:''}${o.tracking?`<div class="muted small">${esc(o.courier||'')} · ${o.courier==='Delivery propio'?'lo lleva':'guía'} ${esc(o.tracking)}</div>`:''}</td>
       <td>${tag(o.status)}${o.st==='pendiente_pago'?`<div class="muted small">Vence ${fdt(o.deadline)}</div>`:''}${o.method==='efectivo'?'<div class="muted small">Paga en efectivo</div>':''}</td><td class="r num nw">${usd(o.total)}</td>
-      <td class="nw">${['pendiente_pago','pago_rechazado'].includes(o.st)?`<button class="btn sm" data-act="cajaorder" data-o="${o.id}">Registrar efectivo</button>`:''}${o.st==='preparando'?`<button class="btn brand sm" data-act="ship" data-o="${o.id}">Despachar</button>`:''}
+      <td class="nw">${['pendiente_pago','pago_rechazado'].includes(o.st)?`<button class="btn sm" data-act="cajaorder" data-o="${o.id}">Registrar efectivo</button>`:''}${o.st==='preparando'?(o.ship.method==='retiro'?`<button class="btn brand sm" data-act="readyret" data-o="${o.id}">Listo para retirar</button>`:`<button class="btn brand sm" data-act="ship" data-o="${o.id}">Despachar</button>`):''}
         ${['enviado','listo_retiro'].includes(o.st)?`<button class="btn sm" data-act="deliver" data-o="${o.id}">Marcar entregado</button>`:''}</td></tr>`).join('')}
     </tbody></table></div>`:'<div class="empty">No hay pedidos en este filtro.</div>'}`;
 }
@@ -2032,7 +2039,7 @@ async function placeOrder(){
   const fail = m => { co.err = m; render(); };
   const items = cartOf(co.store);
   if(items.some(i=>i.qty > P(i.pid).stock)) return fail('Algunos productos ya no tienen suficiente existencia. Revisa tu carrito.');
-  if((co.addr.trim().length<8 || co.city.trim().length<3)) return fail('Escribe la dirección de entrega y la ciudad.');
+  if(co.ship!=='retiro' && (co.addr.trim().length<8 || co.city.trim().length<3)) return fail('Escribe la dirección de entrega y la ciudad.');
   if(co.mode==='financiado'){ const el = eligibility(k.financed, co.store); if(!el.ok) return fail(el.why.join(' ')); }
   if(!(S.termsOk||{})[co.store]) { termsModal(co.store); return; }
   let pago = null;
@@ -2046,7 +2053,7 @@ async function placeOrder(){
     pago = {banco: cur==='Bs' ? co.bank : '', referencia: ref, monto_reportado: amt, comprobante_path: await uploadProof(co.file)};
   }
   const payload = { items: items.map(i=>({producto_id:i.pid, color_idx:i.ci, cap_idx:i.si, cantidad:i.qty, accesorios:!!i.acc})),
-    modalidad: co.mode, n_cuotas: co.n, frecuencia: co.mode==='financiado' ? co.freq : null, acepta_terminos: true, inicial_pct: co.ini, envio_metodo: co.ship, direccion: co.addr, ciudad: co.city,
+    modalidad: co.mode, n_cuotas: co.n, frecuencia: co.mode==='financiado' ? co.freq : null, acepta_terminos: true, inicial_pct: co.ini, envio_metodo: co.ship, direccion: co.ship==='retiro' ? '' : co.addr, ciudad: co.ship==='retiro' ? '' : co.city,
     metodo_pago: co.method, cupon: k.couponOk ? S.coupon : '', pago };
   try{
     const res = await rpc('crear_pedido', {p: payload});
@@ -2158,6 +2165,7 @@ const ACT = {
   ship: d => shipModal(+d.o),
   doship: () => run(async()=>{ const g=$('#sh-guia').value.trim(), local = $('#sh-cour').value==='Delivery propio'; if(!local && g.length<4){ $('#sh-err').textContent='Escribe el número de guía que te dio la empresa de envíos.'; return; }
     await rpc('despachar_pedido', {pid:M.oid, p_transporte:$('#sh-cour').value, p_guia:g}); closeModal(); await refresh(); toast('Pedido despachado.'); }),
+  readyret: d => run(async()=>{ await rpc('marcar_listo_retiro', {pid:+d.o}); await refresh(); toast('Listo. Le avisamos al cliente que puede retirarlo.'); }),
   deliver: d => run(async()=>{ await rpc('entregar_pedido', {pid:+d.o}); await refresh(); toast('Pedido marcado como entregado.'); }),
   stock: d => run(async()=>{ await rpc('ajustar_stock', {pid:+d.id, delta:+d.d}); await refresh(); }),
   cierre: () => run(async()=>{ const r = await rpc('ejecutar_cierre'); await refresh(); toast(`Cierre ejecutado: ${r.moras} mora(s), ${r.canceladas} reserva(s) cancelada(s), ${r.recordatorios} recordatorio(s).`); }),
