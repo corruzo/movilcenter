@@ -201,8 +201,20 @@ async function q(table, order){
   if(error) throw error;
   return data || [];
 }
+// el catálogo público se guarda en el navegador para mostrar la tienda al instante en la próxima visita
+function usePublic(prods, cfg, tds){
+  S.stores = tds.filter(t=>t.activo!==false).map(mapStore);
+  S.products = prods.map(mapProduct);
+  if(cfg[0]) S.cfg = mapCfg(cfg[0]);
+}
+function publicFromCache(){
+  try{ const c = JSON.parse(localStorage.getItem('pub-cache') || 'null');
+    if(!c || c.v!==2 || Date.now()-c.t > 7*864e5 || !c.tds?.length || !c.cfg?.[0]) return false;
+    usePublic(c.prods, c.cfg, c.tds); return true; }catch(e){ return false; }
+}
 async function loadPublic(){
   const [prods, cfg, tds] = await Promise.all([q('productos', ['orden']), q('configuracion'), q('tiendas', ['orden'])]);
+  try{ localStorage.setItem('pub-cache', JSON.stringify({v:2, t:Date.now(), prods:prods.filter(p=>p.activo!==false), cfg, tds})); }catch(e){}
   S.stores = tds.filter(t=>t.activo!==false).map(mapStore);
   if(!S.stores.length) throw new Error('No se encontraron las tiendas. ¿Ejecutaste supabase/instalar_todo.sql en Supabase?');
   S.products = prods.map(mapProduct);
@@ -213,8 +225,12 @@ async function loadPrivate(){
   S.users=[]; S.orders=[]; S.credits=[]; S.payments=[]; S.notifs=[]; S.audit=[]; S.cupo=null; S.cupos={}; S.me=null; S.encs=[];
   if(!S.session) return;
   const uid = S.session.user.id;
-  const [pf, pe, it, cr, cu, pa, pc, no] = await Promise.all([q('perfiles'), q('pedidos',['id',false]), q('pedido_items'), q('creditos',['id',false]),
-    q('cuotas',['numero']), q('pagos',['id',false]), q('pago_cuotas'), q('notificaciones',['id',false])]);
+  // todo en paralelo: una sola espera aunque la conexión sea lenta
+  const opt = p => p.catch(()=>null);
+  const [pf, pe, it, cr, cu, pa, pc, no, en, bt0, th0, po0, cupos0] = await Promise.all([q('perfiles'), q('pedidos',['id',false]), q('pedido_items'), q('creditos',['id',false]),
+    q('cuotas',['numero']), q('pagos',['id',false]), q('pago_cuotas'), q('notificaciones',['id',false]),
+    opt(q('encargos',['id',false])), opt(q('bitacora',['id',false])), opt(q('tasas_historial',['id',false])), opt(q('postulaciones',['id',false])),
+    Promise.all(S.stores.map(t=>sb.rpc('mi_cupo', {financiado:null, p_tienda:t.id}).then(r=>[t.id, r.error?null:r.data], ()=>[t.id, null])))]);
   S.users = pf.map(mapUser);
   S.me = S.users.find(u=>u.id===uid) || null;
   if(!S.me){ toast('Tu cuenta no tiene perfil. Escribe a la tienda para revisarlo.'); return; }
@@ -235,18 +251,17 @@ async function loadPrivate(){
     path:g.comprobante_path, status:g.estado, note:g.nota, reviewedAt:g.revisado_en?new Date(g.revisado_en):null, created:new Date(g.creado_en),
     cuotas: pc.filter(x=>x.pago_id===g.id).map(x=>cuotaById[x.cuota_id]?.n).filter(Boolean).sort((a,b)=>a-b) }));
   S.notifs = no.map(n=>({id:n.id, at:new Date(n.creado_en), text:n.texto, read:n.leida}));
-  try{ S.encs = (await q('encargos',['id',false])).map(e=>({id:e.id, store:e.tienda_id, userId:e.usuario_id, codigo:e.codigo, nombre:e.nombre, telefono:e.telefono, ciudad:e.ciudad, marca:e.marca, modelo:e.modelo,
+  try{ S.encs = (en||[]).map(e=>({id:e.id, store:e.tienda_id, userId:e.usuario_id, codigo:e.codigo, nombre:e.nombre, telefono:e.telefono, ciudad:e.ciudad, marca:e.marca, modelo:e.modelo,
     capacidad:e.capacidad, color:e.color, pago:e.pago, presupuesto:e.presupuesto!=null?+e.presupuesto:null, notas:e.notas, estado:e.estado, nota:e.nota_interna, creado:new Date(e.creado_en)})); }
   catch(e){ S.encs = []; }
   if(S.me.role==='admin'){
-    const bt = await q('bitacora',['id',false]);
-    try{ S.tasas = (await q('tasas_historial',['id',false])).map(h=>({store:h.tienda_id, tasa:+h.tasa, rec:+h.recargo_bs, by:h.actor, at:new Date(h.creado_en)})); }catch(e){ S.tasas = []; }
+    const bt = bt0 || [];
+    try{ S.tasas = (th0||[]).map(h=>({store:h.tienda_id, tasa:+h.tasa, rec:+h.recargo_bs, by:h.actor, at:new Date(h.creado_en)})); }catch(e){ S.tasas = []; }
     S.audit = bt.slice(0,400).map(a=>({at:new Date(a.creado_en), by:a.actor, msg:a.accion, store:a.tienda_id}));
-    try{ S.posts = (await q('postulaciones',['id',false])).map(p=>({id:p.id, store:p.tienda_id, codigo:p.codigo, nombre:p.nombre, cedula:p.cedula, telefono:p.telefono, ciudad:p.ciudad, respuestas:p.respuestas||{}, estado:p.estado, nota:p.nota, creado:new Date(p.creado_en)})); }
+    try{ S.posts = (po0||[]).map(p=>({id:p.id, store:p.tienda_id, codigo:p.codigo, nombre:p.nombre, cedula:p.cedula, telefono:p.telefono, ciudad:p.ciudad, respuestas:p.respuestas||{}, estado:p.estado, nota:p.nota, creado:new Date(p.creado_en)})); }
     catch(e){ S.posts = []; }
   } else {
-    S.cupos = {};
-    await Promise.all(S.stores.map(async t=>{ const {data, error} = await sb.rpc('mi_cupo', {financiado:null, p_tienda:t.id}); if(!error) S.cupos[t.id] = data; }));
+    S.cupos = {}; (cupos0||[]).forEach(([id, d])=>{ if(d!=null) S.cupos[id] = d; });
     S.cupo = S.cupos[S.stores[0]?.id] || null;
   }
 }
@@ -1985,7 +2000,9 @@ async function run(fn){
   S.busy = true; document.body.classList.add('busy');
   try{ await fn(); }
   catch(e){ console.error(e); toast(friendly(e)); }
-  finally{ S.busy = false; document.body.classList.remove('busy'); }
+  finally{ S.busy = false; document.body.classList.remove('busy');
+    // si la pantalla quedó mostrando un botón en espera, se vuelve a dibujar
+    if([...document.querySelectorAll('#app .btn')].some(b=>/…$/.test(b.textContent.trim()))) render(); }
 }
 function friendly(e){
   const m = e?.message || String(e);
@@ -2069,10 +2086,13 @@ const ACT = {
   geoloc: () => { const k = kycInit(me());
     if(!navigator.geolocation){ k.locSkip = true; k.locMsg = 'Tu navegador no permite compartir la ubicación. Revisaremos tu dirección manualmente.'; return render(); }
     k.locMsg = 'Buscando tu ubicación…'; render();
-    navigator.geolocation.getCurrentPosition(pos=>{ k.lat = +pos.coords.latitude.toFixed(6); k.lng = +pos.coords.longitude.toFixed(6); k.acc = pos.coords.accuracy; k.locMsg=''; k.locSkip=false; render(); },
-      err=>{ if(err.code===1){ k.locSkip=false; k.locMsg='Diste “no permitir”. Activa el permiso de ubicación para este sitio en tu navegador y vuelve a pulsar el botón.'; }
+    let done = false; const stop = () => { const was = done; done = true; return was; };
+    // algunos iPhone no responden si la ubicación está apagada para el navegador
+    setTimeout(()=>{ if(stop()) return; k.locSkip = true; k.locMsg = 'No pudimos obtener tu ubicación. Revisa que la ubicación esté activada para tu navegador (en iPhone: Ajustes → Privacidad → Localización → Safari). Puedes continuar sin ella; revisaremos tu dirección manualmente.'; render(); }, 12000);
+    navigator.geolocation.getCurrentPosition(pos=>{ if(stop()) return; k.lat = +pos.coords.latitude.toFixed(6); k.lng = +pos.coords.longitude.toFixed(6); k.acc = pos.coords.accuracy; k.locMsg=''; k.locSkip=false; render(); },
+      err=>{ if(stop()) return; if(err.code===1){ k.locSkip=false; k.locMsg='Diste “no permitir”. Activa el permiso de ubicación para este sitio en tu navegador y vuelve a pulsar el botón.'; }
              else { k.locSkip=true; k.locMsg='No pudimos obtener tu ubicación. Puedes continuar; revisaremos tu dirección manualmente.'; } render(); },
-      {enableHighAccuracy:true, timeout:15000, maximumAge:60000}); },
+      {enableHighAccuracy:false, timeout:10000, maximumAge:300000}); },
   dopostular: () => run(doPostular),
   doencargo: () => run(doEncargo),
   encnew: () => { const t = S.enc?.tienda; S.enc = null; vEncargo(); if(t) S.enc.tienda = t; render(); },
@@ -2293,14 +2313,20 @@ async function init(){
   try{
     const {data} = await sb.auth.getSession();
     S.session = data.session || null;
-    await Promise.all([loadPublic(), loadPrivate()]);
-    syncCartPrices();
+    if(!S.session && !recovering && publicFromCache()){
+      // muestra la tienda ya mismo con lo guardado y la actualiza por detrás
+      S.ready = true; syncCartPrices(); route();
+      loadPublic().then(()=>{ syncCartPrices(); render(); }).catch(e=>console.error(e));
+    } else {
+      await Promise.all([loadPublic(), loadPrivate()]);
+      syncCartPrices();
+    }
   }catch(e){
     console.error(e);
     $('#app').innerHTML = `<div class="setup"><h2>No se pudo conectar con la base de datos</h2><p>${esc(friendly(e))}</p><p class="muted small">Verifica los datos de config.js y que hayas ejecutado los archivos SQL en Supabase.</p></div>`;
     return;
   }
-  S.ready = true;
+  const first = !S.ready; S.ready = true;
   sb.auth.onAuthStateChange((event, session)=>{
     setTimeout(async()=>{
       if(event==='PASSWORD_RECOVERY'){ S.session = session; await loadPrivate(); go('nueva-clave'); return; }
@@ -2312,6 +2338,6 @@ async function init(){
   if(authErr){ toast(decodeURIComponent(authErr[1].replace(/\+/g,' '))); }
   if(recovering && S.session){ history.replaceState(null, '', location.pathname); go('nueva-clave'); return; }
   if(/access_token|error=/.test(location.hash)) history.replaceState(null, '', location.pathname + '#inicio');
-  route();
+  if(first) route();
 }
 init();
