@@ -194,12 +194,18 @@ function mapUser(u){ return {id:u.id, store:u.tienda_id ?? null, name:u.nombre, 
   legalAt:u.legal_aceptado_en?new Date(u.legal_aceptado_en):null, legalV:u.legal_version||'', lat:u.ubic_lat!=null?+u.ubic_lat:null, lng:u.ubic_lng!=null?+u.ubic_lng:null, acc:u.ubic_precision}; }
 
 /* ===================== carga de datos ===================== */
+// si la conexión falla un momento (señal débil, red ocupada), se reintenta antes de mostrar un error
+const netErr = e => /Failed to fetch|NetworkError|network|Load failed|fetch/i.test(e?.message || String(e));
+const wait = ms => new Promise(r=>setTimeout(r, ms));
 async function q(table, order){
-  let qb = sb.from(table).select('*');
-  if(order) qb = qb.order(order[0], {ascending: order[1] !== false});
-  const {data, error} = await qb;
-  if(error) throw error;
-  return data || [];
+  for(let i = 0; ; i++){
+    let qb = sb.from(table).select('*');
+    if(order) qb = qb.order(order[0], {ascending: order[1] !== false});
+    const {data, error} = await qb;
+    if(!error) return data || [];
+    if(i < 2 && netErr(error)){ await wait(800 * (i + 1)); continue; }
+    throw error;
+  }
 }
 // el catálogo público se guarda en el navegador para mostrar la tienda al instante en la próxima visita
 function usePublic(prods, cfg, tds){
@@ -2331,8 +2337,19 @@ async function init(){
     }
   }catch(e){
     console.error(e);
-    $('#app').innerHTML = `<div class="setup"><h2>No se pudo conectar con la base de datos</h2><p>${esc(friendly(e))}</p><p class="muted small">Verifica los datos de config.js y que hayas ejecutado los archivos SQL en Supabase.</p></div>`;
-    return;
+    // sin conexión: si hay un catálogo guardado, se muestra la tienda igual y se reintenta por detrás
+    if(netErr(e) && !S.ready && publicFromCache()){
+      S.ready = true; syncCartPrices(); route();
+      toast('Conexión lenta: te mostramos el catálogo guardado. Reintentando…');
+      const again = async(n)=>{ try{ await Promise.all([loadPublic(), loadPrivate()]); syncCartPrices(); render(); }catch(err){ if(n < 5) setTimeout(()=>again(n+1), 4000); } };
+      setTimeout(()=>again(1), 2500);
+    } else if(!S.ready){
+      $('#app').innerHTML = `<div class="setup"><h2>${netErr(e)?'No pudimos conectarnos':'No se pudo cargar la tienda'}</h2><p>${netErr(e)?'Tu conexión a internet está fallando o es muy lenta en este momento.':esc(friendly(e))}</p>
+        <p><button class="btn buy" id="retry">Intentar de nuevo</button></p>
+        <p class="muted small">${netErr(e)?'Si usas una VPN o un bloqueador de anuncios, desactívalo y vuelve a intentar. También puedes probar con datos móviles o con otra red WiFi.':'Si el problema sigue, escríbenos por WhatsApp.'}</p></div>`;
+      $('#retry')?.addEventListener('click', ()=>location.reload());
+      return;
+    }
   }
   const first = !S.ready; S.ready = true;
   sb.auth.onAuthStateChange((event, session)=>{
